@@ -48,15 +48,16 @@ cp -a /home/wyj/QML_MD3/dist/Md3 ./Md3
 rm -rf build
 cmake -S . -B build -G Ninja
 cmake --build build -j"$(nproc)"
-./build/Md3Create
+./build/bin/Md3Create
 ```
 
-若没有同目录 `Md3/`，可回退到源码：
+若暂时没有同目录 `Md3/`，可回退到源码：
 
 ```bash
 cmake -S . -B build -G Ninja -DMD3_ROOT=/home/wyj/QML_MD3
+cmake --build build -j"$(nproc)"
+./build/bin/Md3Create
 ```
-
 ## 功能
 
 - 多选编译器 / Kit

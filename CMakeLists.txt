@@ -100,7 +100,19 @@ set_target_properties(md3_create PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
     OUTPUT_NAME "Md3Create"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# Avoid a common footgun: a folder named Md3Create in the build dir blocks the linker
+if (IS_DIRECTORY "${CMAKE_BINARY_DIR}/Md3Create")
+    message(WARNING
+        "Removing leftover directory that blocks the executable:\n"
+        "  ${CMAKE_BINARY_DIR}/Md3Create")
+    file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/Md3Create")
+endif()
+if (IS_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Md3Create")
+    file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/bin/Md3Create")
+endif()
 
 target_link_libraries(md3_create PRIVATE
     Qt6::Quick
