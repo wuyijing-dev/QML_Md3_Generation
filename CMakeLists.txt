@@ -120,40 +120,80 @@ target_link_libraries(md3_create PRIVATE
     Qt6::Widgets
 )
 
-# Static QML link order matters (ld is single-pass):
-#   1) whole-archive Md3plugin (+ init stubs)  — pulls undefined refs to qInitResources_*
-#   2) whole-archive Md3                         — provides qml_register_types_Md3 / qInitResources_*
-# Do NOT link Md3 before the plugin.
-if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+# ---- Static packaged Md3: force archive group (fixes ld single-pass order) ----
+if (_md3_from_package)
+    # Reject stale packages that still reference qmlcache (must re-run package-linux.sh)
+    set(_md3_plug_lib "")
     if (TARGET Md3plugin)
-        target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin>")
+        get_target_property(_md3_plug_lib Md3plugin IMPORTED_LOCATION)
+    endif()
+    if (_md3_plug_lib AND EXISTS "${_md3_plug_lib}")
+        execute_process(
+            COMMAND nm -u "${_md3_plug_lib}"
+            OUTPUT_VARIABLE _md3_nm_undef
+            ERROR_QUIET
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if (_md3_nm_undef MATCHES "qInitResources_qmlcache")
+            message(FATAL_ERROR
+                "Packaged Md3 at:\n  ${MD3_DIR}\n"
+                "still references qInitResources_qmlcache_* (old build).\n"
+                "Rebuild the package, then replace this folder:\n"
+                "  cd /path/to/QML_MD3 && git pull && ./scripts/package-linux.sh\n"
+                "  rm -rf \"${MD3_DIR}\" && cp -a dist/Md3 \"${MD3_DIR}\"")
+        endif()
+    endif()
+
+    set(_md3_core_lib "")
+    if (TARGET Md3::Md3)
+        get_target_property(_md3_core_lib Md3::Md3 IMPORTED_LOCATION)
+        # Usage requirements (Qt / KF) without relying on CMake's .a link order
+        get_target_property(_md3_ifacelibs Md3::Md3 INTERFACE_LINK_LIBRARIES)
+        if (_md3_ifacelibs)
+            target_link_libraries(md3_create PRIVATE ${_md3_ifacelibs})
+        endif()
+        get_target_property(_md3_ifaceincs Md3::Md3 INTERFACE_INCLUDE_DIRECTORIES)
+        if (_md3_ifaceincs)
+            target_include_directories(md3_create PRIVATE ${_md3_ifaceincs})
+        endif()
+    endif()
+
+    set(_md3_group_libs "")
+    if (_md3_plug_lib)
+        list(APPEND _md3_group_libs "${_md3_plug_lib}")
     endif()
     if (TARGET Md3plugin_init)
-        target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin_init>")
+        list(APPEND _md3_group_libs "$<TARGET_FILE:Md3plugin_init>")
     endif()
-    if (TARGET Md3::Md3)
-        target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3::Md3>")
-    elseif (TARGET Md3)
-        target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3>")
+    if (_md3_core_lib)
+        list(APPEND _md3_group_libs "${_md3_core_lib}")
+    endif()
+
+    if (_md3_group_libs AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # start-group + whole-archive: resolve qml_register / qInitResources regardless of order
+        target_link_libraries(md3_create PRIVATE
+            "-Wl,--start-group"
+            "-Wl,--whole-archive"
+            ${_md3_group_libs}
+            "-Wl,--no-whole-archive"
+            "-Wl,--end-group"
+        )
+    elseif (_md3_group_libs)
+        target_link_libraries(md3_create PRIVATE ${_md3_group_libs})
     endif()
 else()
-    set(_md3_force_libs "")
-    if (TARGET Md3plugin)
-        list(APPEND _md3_force_libs Md3plugin)
-    endif()
-    if (TARGET Md3plugin_init)
-        list(APPEND _md3_force_libs Md3plugin_init)
+    # Sources via add_subdirectory — normal target graph
+    if (TARGET Md3)
+        target_link_libraries(md3_create PRIVATE Md3)
     endif()
     if (TARGET Md3::Md3)
-        list(APPEND _md3_force_libs Md3::Md3)
-    elseif (TARGET Md3)
-        list(APPEND _md3_force_libs Md3)
+        target_link_libraries(md3_create PRIVATE Md3::Md3)
     endif()
-    if (_md3_force_libs AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_link_libraries(md3_create PRIVATE
-            "-Wl,--whole-archive" ${_md3_force_libs} "-Wl,--no-whole-archive")
-    elseif (_md3_force_libs)
-        target_link_libraries(md3_create PRIVATE ${_md3_force_libs})
+    if (TARGET Md3plugin)
+        target_link_libraries(md3_create PRIVATE Md3plugin)
+    endif()
+    if (TARGET Md3plugin_init)
+        target_link_libraries(md3_create PRIVATE Md3plugin_init)
     endif()
 endif()
 
