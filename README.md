@@ -6,9 +6,26 @@
 
 - **多选编译器 / Kit**（扫描 Qt 根目录，或「添加」自定义前缀）
 - **自动去重项目名**（`MyApp` → `MyApp2`…；可选覆盖同名目录）
-- **复制预编译 Md3 进项目**（默认：`.a`/`.lib` + 头文件 + stubs → `vendor/Md3`；也可改为外部 `add_subdirectory` 引用源码）
+- **复制预编译 Md3 进项目**（固定路径：工程同目录 `Md3/`；向导旁也放同名 `Md3/` 包）
 - 选择模板：`empty` / `basic` / `rail`
 - 生成完整 CMake 工程 + 每个 Kit 一份 `CMakePresets`
+
+**发行布局（固定）：**
+
+```text
+Md3Create.exe
+Md3\                 ← scripts/package-windows.ps1 产物（与向导同目录）
+```
+
+新建工程后：
+
+```text
+MyApp\
+  CMakeLists.txt
+  Main.qml
+  Md3\               ← 从向导旁的 Md3 复制而来（固定相对路径）
+```
+
 
 构建生成工程示例：
 

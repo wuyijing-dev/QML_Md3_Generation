@@ -40,6 +40,9 @@ public:
     /// True if path is Md3 source repo OR a directory containing prebuilt libMd3.
     Q_INVOKABLE bool isValidMd3Path(const QString &path) const;
 
+    /// True if path is a packaged install tree (lib/ + include/ or cmake config).
+    Q_INVOKABLE bool isPackagedMd3Dir(const QString &path) const;
+
     /// Resolve a folder that contains libMd3(.a/.lib) from a source or build path.
     Q_INVOKABLE QString findPrebuiltMd3Dir(const QString &path) const;
 
@@ -70,9 +73,12 @@ private:
     bool writeRendered(const QString &qrcPath, const QString &destFile,
                        const QMap<QString, QString> &vars);
     bool writeBytes(const QString &qrcPath, const QString &destFile);
-    /// Copy only prebuilt libs/headers/init stubs into vendor/Md3 (not full sources).
+    /// Copy only prebuilt libs/headers/init stubs into Md3/ (not full sources).
     bool copyPrebuiltMd3(const QString &sourceOrBuildPath, const QString &destVendorDir);
+    /// Copy an already-packaged Md3 tree (from package-windows/linux) into dest.
+    bool copyPackagedMd3Tree(const QString &packageDir, const QString &destDir);
     static bool copyOneFile(const QString &src, const QString &dst);
+    static bool copyDirectoryRecursively(const QString &src, const QString &dst);
 
     QVariantList m_kits;
     QString m_qtRoot;

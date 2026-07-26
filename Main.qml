@@ -148,7 +148,7 @@ Md3ApplicationWindow {
             md3Path: md3Field.text.trim(),
             md3Absolute: copyLibrary ? false : md3Absolute,
             copyLibrary: copyLibrary,
-            vendorFolder: "vendor/Md3",
+            vendorFolder: "Md3",
             dark: darkSwitch.checked,
             seed: seedField.text.trim() || "#6750A4",
             force: forceSwitch.checked
@@ -523,16 +523,16 @@ Md3ApplicationWindow {
                             Md3TextField {
                                 id: md3Field
                                 Layout.fillWidth: true
-                                label: window.copyLibrary ? qsTr("Md3 预编译/构建目录")
+                                label: window.copyLibrary ? qsTr("同目录 Md3 包（将复制为 ./Md3）")
                                                           : qsTr("Md3 库目录（外部引用）")
                                 text: ProjectGenerator.md3Path
                                 supportingText: ProjectGenerator.isValidMd3Path(text)
                                                  ? (window.copyLibrary
-                                                    ? qsTr("只复制 .a/.lib + 头文件 → vendor/Md3")
+                                                    ? qsTr("固定复制到工程同目录 Md3/")
                                                     : qsTr("路径有效"))
                                                  : (window.copyLibrary
-                                                    ? qsTr("需含 libMd3.a/.lib（或源码旁的 build）")
-                                                    : qsTr("需包含 CMakeLists.txt"))
+                                                    ? qsTr("需为 Md3Create 旁的 Md3/ 包或含 libMd3 的目录")
+                                                    : qsTr("需包含 CMakeLists.txt 或已打包的 Md3"))
                                 error: text.length > 0 && !ProjectGenerator.isValidMd3Path(text)
                                 onTextChanged: ProjectGenerator.md3Path = text
                             }
@@ -620,7 +620,7 @@ Md3ApplicationWindow {
                                   .arg(window.resolvedName)
                                   .arg(templateIds[templateIndex])
                                   .arg(window.selectedKitsLabel())
-                                  .arg(window.copyLibrary ? qsTr("库→vendor") : qsTr("外链库"))
+                                  .arg(window.copyLibrary ? qsTr("库→./Md3") : qsTr("外链库"))
                             color: Md3Theme.colorScheme.colorOnSurfaceVariant
                             font.family: Md3Theme.typography.fontFamily
                             font.pixelSize: 11

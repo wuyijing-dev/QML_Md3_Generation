@@ -12,7 +12,27 @@ find_package(Qt6 {{QT_VERSION_MM}} REQUIRED COMPONENTS
 )
 qt_standard_project_setup(REQUIRES {{QT_VERSION_MM}})
 
-{{MD3_CMAKE_BLOCK}}
+# ---- Md3: packaged library in the SAME directory as this CMakeLists.txt ----
+# Layout required:
+#   <this-project>/
+#     CMakeLists.txt
+#     Md3/                 ← fixed name (libs + cmake + headers)
+#       lib/
+#       include/
+#       lib/cmake/Md3/     or Md3Prebuilt.cmake
+set(MD3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Md3" CACHE PATH
+    "Md3 package next to this CMakeLists.txt")
+if (EXISTS "${MD3_DIR}/lib/cmake/Md3/Md3Config.cmake")
+    list(APPEND CMAKE_PREFIX_PATH "${MD3_DIR}")
+    find_package(Md3 REQUIRED CONFIG)
+elseif (EXISTS "${MD3_DIR}/Md3Prebuilt.cmake")
+    include("${MD3_DIR}/Md3Prebuilt.cmake")
+else()
+    message(FATAL_ERROR
+        "Md3 package not found at:\n  ${MD3_DIR}\n"
+        "Place the packaged library folder named exactly \"Md3\" "
+        "beside this CMakeLists.txt (same directory).")
+endif()
 
 qt_add_executable({{TARGET_NAME}} main.cpp)
 
@@ -32,8 +52,13 @@ set_target_properties({{TARGET_NAME}} PROPERTIES
 target_link_libraries({{TARGET_NAME}} PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
-    Md3
 )
+if (TARGET Md3)
+    target_link_libraries({{TARGET_NAME}} PRIVATE Md3)
+endif()
+if (TARGET Md3::Md3)
+    target_link_libraries({{TARGET_NAME}} PRIVATE Md3::Md3)
+endif()
 if (TARGET Md3plugin)
     target_link_libraries({{TARGET_NAME}} PRIVATE Md3plugin)
 endif()

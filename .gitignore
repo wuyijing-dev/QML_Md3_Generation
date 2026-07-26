@@ -19,3 +19,9 @@ CMakeLists.txt.user*
 *.pdb
 *.a
 *.dll
+
+# Local packaged Md3 next to wizard (do not commit)
+/Md3/
+/dist/
+/dist-bundle/
+
