@@ -3,6 +3,11 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
 
+// Static Md3 QML module (packaged libMd3plugin.a) must be referenced or the
+// linker drops it — without this, runtime shows: module "Md3" is not installed.
+#include <QtQml/qqmlextensionplugin.h>
+Q_IMPORT_QML_PLUGIN(Md3Plugin)
+
 int main(int argc, char *argv[])
 {
     Md3::RunOptions opts;

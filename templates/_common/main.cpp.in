@@ -1,5 +1,8 @@
 #include "md3.h"
 
+#include <QtQml/qqmlextensionplugin.h>
+Q_IMPORT_QML_PLUGIN(Md3Plugin)
+
 int main(int argc, char *argv[])
 {
     Md3::RunOptions opts;
