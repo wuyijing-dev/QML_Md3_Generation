@@ -49,12 +49,33 @@ Md3ApplicationWindow {
             selectedKitIndexes = []
             return
         }
+        const onWindows = Qt.platform.os === "windows"
         let idx = -1
+        // Prefer 6.10 + platform toolchain
         for (let i = 0; i < kits.length; ++i) {
             const k = kits[i]
-            if (String(k.version).indexOf("6.10") === 0 && String(k.kit).indexOf("mingw") >= 0) {
+            const ver = String(k.version)
+            const kit = String(k.kit).toLowerCase()
+            if (ver.indexOf("6.10") !== 0 && ver.indexOf("6.8") !== 0 && ver.indexOf("6.9") !== 0)
+                continue
+            if (onWindows && kit.indexOf("mingw") >= 0) {
                 idx = i
                 break
+            }
+            if (!onWindows && (kit.indexOf("gcc") >= 0 || kit.indexOf("linux") >= 0
+                               || kit.indexOf("clang") >= 0 || kit === "usr")) {
+                idx = i
+                break
+            }
+        }
+        // Any Qt 6.x
+        if (idx < 0) {
+            for (let i = 0; i < kits.length; ++i) {
+                if (String(kits[i].version).indexOf("6.") === 0
+                        || String(kits[i].version) === "system") {
+                    idx = i
+                    break
+                }
             }
         }
         if (idx < 0)
@@ -458,7 +479,7 @@ Md3ApplicationWindow {
                                 variant: Md3Button.Outlined
                                 onClicked: {
                                     const d = ProjectGenerator.pickDirectory(
-                                                qsTr("选择 Qt Kit 前缀（如 …/6.10.2/mingw_64）"),
+                                                qsTr("选择 Qt Kit 前缀（如 …/6.10.2/gcc_64 或 /usr）"),
                                                 ProjectGenerator.qtRoot)
                                     if (!d)
                                         return
@@ -505,7 +526,7 @@ Md3ApplicationWindow {
                                 Text {
                                     visible: ProjectGenerator.kits.length === 0
                                     anchors.centerIn: parent
-                                    text: qsTr("未找到 Kit，可点「添加」指定前缀")
+                                    text: qsTr("未找到 Kit：检查 Qt 根目录，或点「添加」指定 …/gcc_64 或 /usr")
                                     color: Md3Theme.colorScheme.colorOnSurfaceVariant
                                     font.family: Md3Theme.typography.fontFamily
                                     font.pixelSize: 12

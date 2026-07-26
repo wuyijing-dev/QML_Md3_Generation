@@ -80,6 +80,17 @@ private:
     static bool copyOneFile(const QString &src, const QString &dst);
     static bool copyDirectoryRecursively(const QString &src, const QString &dst);
 
+    /// True if prefix has Qt6Config.cmake and/or qmake(6).
+    static bool isQt6Prefix(const QString &prefix);
+    /// Online-installer root ($HOME/Qt) or single prefix (/usr, …/gcc_64).
+    static QString detectDefaultQtRoot();
+    /// qmake6 / qtpaths6 install prefix when available.
+    static QString queryQtInstallPrefix();
+    /// Append kit if prefix valid and not already listed.
+    bool tryAddKitPrefix(const QString &prefix, bool custom = false);
+    /// Scan online-installer layout: root/<ver>/<kit>.
+    void scanInstallerKits(const QString &root);
+
     QVariantList m_kits;
     QString m_qtRoot;
     QString m_md3Path;

@@ -11,17 +11,189 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
+
+namespace {
+
+bool hasQt6ConfigUnderLib(const QString &libDir)
+{
+    if (QFileInfo::exists(libDir + QStringLiteral("/cmake/Qt6/Qt6Config.cmake")))
+        return true;
+    const QDir d(libDir);
+    if (!d.exists())
+        return false;
+    const QStringList subs = d.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &sub : subs) {
+        if (QFileInfo::exists(d.filePath(sub) + QStringLiteral("/cmake/Qt6/Qt6Config.cmake")))
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
+bool ProjectGenerator::isQt6Prefix(const QString &prefix)
+{
+    const QString p = QDir::cleanPath(prefix);
+    if (p.isEmpty() || !QFileInfo(p).isDir())
+        return false;
+    if (hasQt6ConfigUnderLib(p + QStringLiteral("/lib")))
+        return true;
+    // Debian/Ubuntu multiarch sometimes under /usr/lib/<triplet> with prefix /usr
+    if (hasQt6ConfigUnderLib(p + QStringLiteral("/lib64")))
+        return true;
+    const QStringList qmakes = {
+        p + QStringLiteral("/bin/qmake6"),
+        p + QStringLiteral("/bin/qmake"),
+#if defined(Q_OS_WIN)
+        p + QStringLiteral("/bin/qmake.exe"),
+#endif
+    };
+    for (const QString &qm : qmakes) {
+        if (QFileInfo::exists(qm))
+            return true;
+    }
+    return false;
+}
+
+QString ProjectGenerator::queryQtInstallPrefix()
+{
+    const QStringList tools = {
+        QStringLiteral("qtpaths6"),
+        QStringLiteral("qtpaths"),
+        QStringLiteral("qmake6"),
+        QStringLiteral("qmake"),
+    };
+    for (const QString &tool : tools) {
+        const QString exe = QStandardPaths::findExecutable(tool);
+        if (exe.isEmpty())
+            continue;
+        QProcess proc;
+        proc.setProgram(exe);
+        if (tool.startsWith(QLatin1String("qtpaths")))
+            proc.setArguments({QStringLiteral("--install-prefix")});
+        else
+            proc.setArguments({QStringLiteral("-query"), QStringLiteral("QT_INSTALL_PREFIX")});
+        proc.start();
+        if (!proc.waitForFinished(3000) || proc.exitCode() != 0)
+            continue;
+        const QString out = QString::fromLocal8Bit(proc.readAllStandardOutput()).trimmed();
+        if (!out.isEmpty() && QFileInfo(out).isDir())
+            return QDir::cleanPath(out);
+    }
+    return {};
+}
+
+QString ProjectGenerator::detectDefaultQtRoot()
+{
+    const QByteArray envRoot = qgetenv("QT_ROOT");
+    if (!envRoot.isEmpty()) {
+        const QString p = QDir::cleanPath(QString::fromLocal8Bit(envRoot));
+        if (QFileInfo(p).isDir())
+            return p;
+    }
+
+    // Online installer roots
+    const QString homeQt = QDir::cleanPath(QDir::homePath() + QStringLiteral("/Qt"));
+#if defined(Q_OS_WIN)
+    const QStringList candidates = {
+        QStringLiteral("D:/Qt"),
+        QStringLiteral("C:/Qt"),
+        homeQt,
+        QDir::cleanPath(QDir::homePath() + QStringLiteral("/AppData/Local/Qt")),
+    };
+#else
+    const QStringList candidates = {
+        homeQt,
+        QStringLiteral("/opt/Qt"),
+        QStringLiteral("/usr"),
+    };
+#endif
+    for (const QString &c : candidates) {
+        if (QFileInfo(c).isDir())
+            return c;
+    }
+
+    // From PATH qmake: …/6.10.2/gcc_64 → prefer installer root …/Qt
+    const QString prefix = queryQtInstallPrefix();
+    if (!prefix.isEmpty()) {
+        QDir d(prefix);
+        if (d.cdUp()) {
+            const QString ver = d.dirName();
+            static const QRegularExpression verRe(QStringLiteral(R"(^\d+\.\d+(\.\d+)?$)"));
+            if (verRe.match(ver).hasMatch() && d.cdUp() && QFileInfo(d.absolutePath()).isDir())
+                return d.absolutePath(); // e.g. $HOME/Qt
+        }
+        return prefix; // system /usr or flat prefix
+    }
+
+#if defined(Q_OS_WIN)
+    return QStringLiteral("D:/Qt");
+#else
+    return homeQt;
+#endif
+}
+
+bool ProjectGenerator::tryAddKitPrefix(const QString &prefixPath, bool custom)
+{
+    const QString prefix = cmakePath(prefixPath);
+    if (!isQt6Prefix(prefix))
+        return false;
+
+    for (const QVariant &v : m_kits) {
+        if (v.toMap().value(QStringLiteral("prefix")).toString() == prefix)
+            return true;
+    }
+
+    QDir kitDir(prefix);
+    const QString kitName = kitDir.dirName();
+    QString ver = QStringLiteral("custom");
+    if (kitDir.cdUp()) {
+        const QString maybeVer = kitDir.dirName();
+        static const QRegularExpression verRe(QStringLiteral(R"(^\d+\.\d+(\.\d+)?$)"));
+        if (verRe.match(maybeVer).hasMatch())
+            ver = maybeVer;
+        else if (kitName == QLatin1String("usr") || prefix == QLatin1String("/usr"))
+            ver = QStringLiteral("system");
+        else
+            ver = maybeVer;
+    }
+
+    QVariantMap row;
+    row.insert(QStringLiteral("label"), QStringLiteral("Qt %1 / %2").arg(ver, kitName));
+    row.insert(QStringLiteral("version"), ver);
+    row.insert(QStringLiteral("kit"), kitName);
+    row.insert(QStringLiteral("prefix"), prefix);
+    if (custom)
+        row.insert(QStringLiteral("custom"), true);
+    m_kits.append(row);
+    return true;
+}
+
+void ProjectGenerator::scanInstallerKits(const QString &rootPath)
+{
+    QDir root(rootPath);
+    if (!root.exists())
+        return;
+
+    const QStringList versions = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    static const QRegularExpression verRe(QStringLiteral(R"(^\d+\.\d+(\.\d+)?$)"));
+    for (const QString &ver : versions) {
+        if (!verRe.match(ver).hasMatch())
+            continue;
+        QDir verDir(root.filePath(ver));
+        const QStringList kits = verDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QString &kit : kits)
+            tryAddKitPrefix(verDir.filePath(kit), false);
+    }
+}
 
 ProjectGenerator::ProjectGenerator(QObject *parent)
     : QObject(parent)
 {
-#if defined(Q_OS_WIN)
-    m_qtRoot = QStringLiteral("D:/Qt");
-#else
-    m_qtRoot = QStringLiteral("/opt/Qt");
-#endif
+    m_qtRoot = detectDefaultQtRoot();
     // Fixed layout: Md3 package sits next to Md3Create.exe (same directory).
     // Fallbacks: ../Md3, sibling QML_MD3 sources, local build trees.
     const QDir appDir(QCoreApplication::applicationDirPath());
@@ -91,7 +263,10 @@ bool ProjectGenerator::isPackagedMd3Dir(const QString &path) const
             QFileInfo::exists(p + QStringLiteral("/lib/libMd3.a"))
             || QFileInfo::exists(p + QStringLiteral("/lib/libMd3.lib"))
             || QFileInfo::exists(p + QStringLiteral("/lib/Md3.lib"))
-            || QFileInfo::exists(p + QStringLiteral("/lib/libMd3.so"));
+            || QFileInfo::exists(p + QStringLiteral("/lib/libMd3.so"))
+            || QFileInfo::exists(p + QStringLiteral("/lib/libMd3.dylib"))
+            || !QDir(p + QStringLiteral("/lib")).entryList({QStringLiteral("libMd3.so*")},
+                                                          QDir::Files).isEmpty();
     const bool hasHeaders =
             QFileInfo::exists(p + QStringLiteral("/include/Md3/md3.h"))
             || QFileInfo::exists(p + QStringLiteral("/include/md3.h"));
@@ -229,36 +404,14 @@ bool ProjectGenerator::addCustomKit(const QString &prefixPath)
         setError(QStringLiteral("Kit 路径无效"));
         return false;
     }
-    const QString cfg = prefix + QStringLiteral("/lib/cmake/Qt6/Qt6Config.cmake");
-    const QString qmake = prefix + QStringLiteral("/bin/qmake")
-#if defined(Q_OS_WIN)
-            + QStringLiteral(".exe")
-#endif
-            ;
-    if (!QFileInfo::exists(cfg) && !QFileInfo::exists(qmake)) {
+    if (!isQt6Prefix(prefix)) {
         setError(QStringLiteral("不是有效的 Qt Kit 前缀: %1").arg(prefix));
         return false;
     }
-
-    // Infer version / kit from path .../6.10.2/mingw_64
-    QDir kitDir(prefix);
-    const QString kitName = kitDir.dirName();
-    QString ver = QStringLiteral("custom");
-    if (kitDir.cdUp())
-        ver = kitDir.dirName();
-
-    for (const QVariant &v : m_kits) {
-        if (v.toMap().value(QStringLiteral("prefix")).toString() == prefix)
-            return true; // already present
+    if (!tryAddKitPrefix(prefix, true)) {
+        setError(QStringLiteral("添加 Kit 失败: %1").arg(prefix));
+        return false;
     }
-
-    QVariantMap row;
-    row.insert(QStringLiteral("label"), QStringLiteral("Qt %1 / %2").arg(ver, kitName));
-    row.insert(QStringLiteral("version"), ver);
-    row.insert(QStringLiteral("kit"), kitName);
-    row.insert(QStringLiteral("prefix"), prefix);
-    row.insert(QStringLiteral("custom"), true);
-    m_kits.append(row);
     emit kitsChanged();
     return true;
 }
@@ -295,37 +448,47 @@ QString ProjectGenerator::render(const QString &text, const QMap<QString, QStrin
 void ProjectGenerator::refreshKits()
 {
     m_kits.clear();
-    QDir root(m_qtRoot);
-    if (!root.exists()) {
-        emit kitsChanged();
-        return;
+
+    // Primary: user-selected / detected Qt root (online installer or flat prefix)
+    if (!m_qtRoot.trimmed().isEmpty()) {
+        scanInstallerKits(m_qtRoot);
+        if (isQt6Prefix(m_qtRoot))
+            tryAddKitPrefix(m_qtRoot, false);
     }
 
-    const QStringList versions = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-    static const QRegularExpression verRe(QStringLiteral(R"(^\d+\.\d+(\.\d+)?$)"));
-    for (const QString &ver : versions) {
-        if (!verRe.match(ver).hasMatch())
-            continue;
-        QDir verDir(root.filePath(ver));
-        const QStringList kits = verDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-        for (const QString &kit : kits) {
-            const QString prefix = verDir.filePath(kit);
-            const QString cfg = prefix + QStringLiteral("/lib/cmake/Qt6/Qt6Config.cmake");
-            const QString qmake = prefix + QStringLiteral("/bin/qmake")
+    // Extra roots commonly present on Linux / Windows (do not change m_qtRoot)
+    QStringList extraRoots;
 #if defined(Q_OS_WIN)
-                + QStringLiteral(".exe")
+    extraRoots << QStringLiteral("D:/Qt") << QStringLiteral("C:/Qt")
+               << QDir::cleanPath(QDir::homePath() + QStringLiteral("/Qt"));
+#else
+    extraRoots << QDir::cleanPath(QDir::homePath() + QStringLiteral("/Qt"))
+               << QStringLiteral("/opt/Qt")
+               << QStringLiteral("/usr");
 #endif
-                ;
-            if (!QFileInfo::exists(cfg) && !QFileInfo::exists(qmake))
-                continue;
-            QVariantMap row;
-            row.insert(QStringLiteral("label"), QStringLiteral("Qt %1 / %2").arg(ver, kit));
-            row.insert(QStringLiteral("version"), ver);
-            row.insert(QStringLiteral("kit"), kit);
-            row.insert(QStringLiteral("prefix"), cmakePath(prefix));
-            m_kits.append(row);
-        }
+    for (const QString &r : extraRoots) {
+        if (r.isEmpty() || r == QDir::cleanPath(m_qtRoot))
+            continue;
+        if (!QFileInfo(r).isDir())
+            continue;
+        scanInstallerKits(r);
+        if (isQt6Prefix(r))
+            tryAddKitPrefix(r, false);
     }
+
+    // PATH qmake / qtpaths prefix (system packages, custom installs)
+    const QString fromPath = queryQtInstallPrefix();
+    if (!fromPath.isEmpty())
+        tryAddKitPrefix(fromPath, false);
+
+    // CMAKE_PREFIX_PATH may list kit prefixes
+    const QString cpp = QString::fromLocal8Bit(qgetenv("CMAKE_PREFIX_PATH"));
+    for (const QString &part : cpp.split(QDir::listSeparator(), Qt::SkipEmptyParts)) {
+        const QString p = QDir::cleanPath(part.trimmed());
+        if (!p.isEmpty())
+            tryAddKitPrefix(p, false);
+    }
+
     emit kitsChanged();
 }
 

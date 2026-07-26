@@ -71,7 +71,7 @@ cmake --build build -j"$(nproc)"
 
 ## 功能
 
-- 多选编译器 / Kit
+- 多选编译器 / Kit（Linux 自动扫 `$HOME/Qt`、`/opt/Qt`、`/usr`、`qmake6` / `CMAKE_PREFIX_PATH`）
 - 自动去重项目名
 - 生成工程时把 `Md3/` 复制进新项目同目录
 - 模板：`empty` / `basic` / `rail`
@@ -88,6 +88,7 @@ cmake --build --preset default
 
 | 现象 | 处理 |
 |------|------|
+| 未找到编译器 / Kit | Linux：默认扫 `$HOME/Qt`、`/opt/Qt`、`/usr` 与 PATH 上的 `qmake6`；或点「添加」选 `~/Qt/6.x/gcc_64`。也可设 `QT_ROOT` / `CMAKE_PREFIX_PATH` |
 | `not a CMake build directory` | 先执行 `cmake -S . -B build`，不要只 `mkdir build` |
 | `Md3Create: Is a directory` | 删掉 `build/Md3Create/`；可执行文件在 `build/bin/Md3Create` |
 | `module "Md3" is not installed` | 确认已 `git pull`（含 `Q_IMPORT_QML_PLUGIN`）；整库 `--whole-archive` 链接静态插件 |
