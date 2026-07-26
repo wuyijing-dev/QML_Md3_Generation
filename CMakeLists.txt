@@ -119,20 +119,22 @@ target_link_libraries(md3_create PRIVATE
     Qt6::QuickControls2
     Qt6::Widgets
 )
-if (TARGET Md3)
-    target_link_libraries(md3_create PRIVATE Md3)
-endif()
-if (TARGET Md3::Md3)
-    target_link_libraries(md3_create PRIVATE Md3::Md3)
-endif()
-# Force-load static QML plugin archives (otherwise ld drops unused .a members).
-# main.cpp also has Q_IMPORT_QML_PLUGIN(Md3Plugin).
+
+# Static QML link order matters (ld is single-pass):
+#   1) whole-archive Md3plugin (+ init stubs)  — pulls undefined refs to qInitResources_*
+#   2) whole-archive Md3                         — provides qml_register_types_Md3 / qInitResources_*
+# Do NOT link Md3 before the plugin.
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
     if (TARGET Md3plugin)
         target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin>")
     endif()
     if (TARGET Md3plugin_init)
         target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin_init>")
+    endif()
+    if (TARGET Md3::Md3)
+        target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3::Md3>")
+    elseif (TARGET Md3)
+        target_link_libraries(md3_create PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3>")
     endif()
 else()
     set(_md3_force_libs "")
@@ -141,6 +143,11 @@ else()
     endif()
     if (TARGET Md3plugin_init)
         list(APPEND _md3_force_libs Md3plugin_init)
+    endif()
+    if (TARGET Md3::Md3)
+        list(APPEND _md3_force_libs Md3::Md3)
+    elseif (TARGET Md3)
+        list(APPEND _md3_force_libs Md3)
     endif()
     if (_md3_force_libs AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_link_libraries(md3_create PRIVATE
