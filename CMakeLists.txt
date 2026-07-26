@@ -114,11 +114,14 @@ if (IS_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Md3Create")
     file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/bin/Md3Create")
 endif()
 
-target_link_libraries(md3_create PRIVATE
-    Qt6::Quick
-    Qt6::QuickControls2
-    Qt6::Widgets
-)
+# Base Qt for source builds. Packaged builds link Qt *after* the static .a group.
+if (NOT _md3_from_package)
+    target_link_libraries(md3_create PRIVATE
+        Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::Widgets
+    )
+endif()
 
 # ---- Static packaged Md3: force archive group (fixes ld single-pass order) ----
 if (_md3_from_package)
@@ -147,11 +150,6 @@ if (_md3_from_package)
     set(_md3_core_lib "")
     if (TARGET Md3::Md3)
         get_target_property(_md3_core_lib Md3::Md3 IMPORTED_LOCATION)
-        # Usage requirements (Qt / KF) without relying on CMake's .a link order
-        get_target_property(_md3_ifacelibs Md3::Md3 INTERFACE_LINK_LIBRARIES)
-        if (_md3_ifacelibs)
-            target_link_libraries(md3_create PRIVATE ${_md3_ifacelibs})
-        endif()
         get_target_property(_md3_ifaceincs Md3::Md3 INTERFACE_INCLUDE_DIRECTORIES)
         if (_md3_ifaceincs)
             target_include_directories(md3_create PRIVATE ${_md3_ifaceincs})
@@ -178,6 +176,28 @@ if (_md3_from_package)
             "-Wl,--no-whole-archive"
             "-Wl,--end-group"
         )
+        # Qt / KF *after* static archives (QQuickStyle lives in QuickControls2)
+        target_link_libraries(md3_create PRIVATE
+            Qt6::Quick
+            Qt6::QuickControls2
+            Qt6::QuickEffects
+            Qt6::QuickShapesPrivate
+            Qt6::Widgets
+        )
+        if (TARGET Qt6::DBus)
+            target_link_libraries(md3_create PRIVATE Qt6::DBus)
+        endif()
+        if (UNIX AND NOT APPLE)
+            find_package(KF6WindowSystem QUIET)
+            if (KF6WindowSystem_FOUND)
+                target_link_libraries(md3_create PRIVATE KF6::WindowSystem)
+            else()
+                find_package(KF5WindowSystem QUIET)
+                if (KF5WindowSystem_FOUND)
+                    target_link_libraries(md3_create PRIVATE KF5::WindowSystem)
+                endif()
+            endif()
+        endif()
     elseif (_md3_group_libs)
         target_link_libraries(md3_create PRIVATE ${_md3_group_libs})
     endif()
@@ -195,17 +215,15 @@ else()
     if (TARGET Md3plugin_init)
         target_link_libraries(md3_create PRIVATE Md3plugin_init)
     endif()
-endif()
-
-# Static Md3 on Linux may need KWindowEffects / KX11Extras from the package build
-if (UNIX AND NOT APPLE)
-    find_package(KF6WindowSystem QUIET)
-    if (KF6WindowSystem_FOUND)
-        target_link_libraries(md3_create PRIVATE KF6::WindowSystem)
-    else()
-        find_package(KF5WindowSystem QUIET)
-        if (KF5WindowSystem_FOUND)
-            target_link_libraries(md3_create PRIVATE KF5::WindowSystem)
+    if (UNIX AND NOT APPLE)
+        find_package(KF6WindowSystem QUIET)
+        if (KF6WindowSystem_FOUND)
+            target_link_libraries(md3_create PRIVATE KF6::WindowSystem)
+        else()
+            find_package(KF5WindowSystem QUIET)
+            if (KF5WindowSystem_FOUND)
+                target_link_libraries(md3_create PRIVATE KF5::WindowSystem)
+            endif()
         endif()
     endif()
 endif()
