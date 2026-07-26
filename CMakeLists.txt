@@ -13,30 +13,59 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS
 )
 qt_standard_project_setup(REQUIRES 6.8)
 
-# Path to QML_MD3 sources (not hardcoded). Override with -DMD3_ROOT=...
-set(MD3_ROOT "" CACHE PATH "Path to QML_MD3 repository (contains src/Md3)")
-if (NOT MD3_ROOT)
-    foreach (_cand IN ITEMS
-            "${CMAKE_CURRENT_SOURCE_DIR}/../QML_MD3"
-            "${CMAKE_CURRENT_SOURCE_DIR}/../QML_Md3"
-            "$ENV{MD3_ROOT}"
-            "$ENV{HOME}/QML_MD3"
-            "$ENV{HOME}/md3_generation/QML_MD3")
-        if (_cand AND EXISTS "${_cand}/CMakeLists.txt" AND EXISTS "${_cand}/src/Md3")
-            set(MD3_ROOT "${_cand}" CACHE PATH "Path to QML_MD3 repository (contains src/Md3)" FORCE)
-            break()
-        endif()
-    endforeach()
-endif()
-if (NOT MD3_ROOT OR NOT EXISTS "${MD3_ROOT}/CMakeLists.txt")
-    message(FATAL_ERROR
-        "QML_MD3 not found. Set -DMD3_ROOT=/path/to/QML_MD3 "
-        "(repo root with src/Md3), or clone it as a sibling of this project.")
-endif()
-message(STATUS "Md3Create: MD3_ROOT=${MD3_ROOT}")
+# ---------------------------------------------------------------------------
+# Md3: prefer packaged library in the SAME directory as this CMakeLists.txt
+#
+#   QML_Md3_Generation/
+#     CMakeLists.txt
+#     Main.qml
+#     Md3/                 ← fixed name (from package-linux.sh / package-windows.ps1)
+#       lib/
+#       include/
+#       lib/cmake/Md3/
+#
+# Fallback: -DMD3_ROOT=/path/to/QML_MD3 sources (add_subdirectory).
+# ---------------------------------------------------------------------------
+set(MD3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Md3" CACHE PATH
+    "Packaged Md3 next to this CMakeLists.txt")
+set(_md3_from_package FALSE)
 
-set(MD3_BUILD_GALLERY OFF CACHE BOOL "Skip Gallery" FORCE)
-add_subdirectory("${MD3_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/md3")
+if (EXISTS "${MD3_DIR}/lib/cmake/Md3/Md3Config.cmake")
+    list(APPEND CMAKE_PREFIX_PATH "${MD3_DIR}")
+    find_package(Md3 REQUIRED CONFIG)
+    set(_md3_from_package TRUE)
+    message(STATUS "Md3Create: using same-dir package MD3_DIR=${MD3_DIR}")
+elseif (EXISTS "${MD3_DIR}/Md3Prebuilt.cmake")
+    include("${MD3_DIR}/Md3Prebuilt.cmake")
+    set(_md3_from_package TRUE)
+    message(STATUS "Md3Create: using same-dir Md3Prebuilt.cmake at ${MD3_DIR}")
+else()
+    set(MD3_ROOT "" CACHE PATH "Path to QML_MD3 repository (contains src/Md3)")
+    if (NOT MD3_ROOT)
+        foreach (_cand IN ITEMS
+                "${CMAKE_CURRENT_SOURCE_DIR}/../QML_MD3"
+                "${CMAKE_CURRENT_SOURCE_DIR}/../QML_Md3"
+                "$ENV{MD3_ROOT}"
+                "$ENV{HOME}/QML_MD3"
+                "$ENV{HOME}/md3_generation/QML_MD3")
+            if (_cand AND EXISTS "${_cand}/CMakeLists.txt" AND EXISTS "${_cand}/src/Md3")
+                set(MD3_ROOT "${_cand}" CACHE PATH "Path to QML_MD3 repository (contains src/Md3)" FORCE)
+                break()
+            endif()
+        endforeach()
+    endif()
+    if (NOT MD3_ROOT OR NOT EXISTS "${MD3_ROOT}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "Md3 not found.\n"
+            "  Preferred: put packaged library at\n"
+            "    ${CMAKE_CURRENT_SOURCE_DIR}/Md3\n"
+            "    (run QML_MD3/scripts/package-linux.sh and copy dist/Md3 here)\n"
+            "  Or set -DMD3_ROOT=/path/to/QML_MD3 sources.")
+    endif()
+    message(STATUS "Md3Create: MD3_ROOT=${MD3_ROOT} (sources via add_subdirectory)")
+    set(MD3_BUILD_GALLERY OFF CACHE BOOL "Skip Gallery" FORCE)
+    add_subdirectory("${MD3_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/md3")
+endif()
 
 qt_add_executable(md3_create main.cpp)
 
@@ -77,10 +106,18 @@ target_link_libraries(md3_create PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Widgets
-    Md3
 )
+if (TARGET Md3)
+    target_link_libraries(md3_create PRIVATE Md3)
+endif()
+if (TARGET Md3::Md3)
+    target_link_libraries(md3_create PRIVATE Md3::Md3)
+endif()
 if (TARGET Md3plugin)
     target_link_libraries(md3_create PRIVATE Md3plugin)
+endif()
+if (TARGET Md3plugin_init)
+    target_link_libraries(md3_create PRIVATE Md3plugin_init)
 endif()
 
 if (WIN32 AND MSVC)
