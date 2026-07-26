@@ -148,7 +148,7 @@ Md3ApplicationWindow {
             md3Path: md3Field.text.trim(),
             md3Absolute: copyLibrary ? false : md3Absolute,
             copyLibrary: copyLibrary,
-            vendorFolder: "vendor/QML_MD3",
+            vendorFolder: "vendor/Md3",
             dark: darkSwitch.checked,
             seed: seedField.text.trim() || "#6750A4",
             force: forceSwitch.checked
@@ -523,14 +523,16 @@ Md3ApplicationWindow {
                             Md3TextField {
                                 id: md3Field
                                 Layout.fillWidth: true
-                                label: window.copyLibrary ? qsTr("Md3 源库（将复制进项目）")
+                                label: window.copyLibrary ? qsTr("Md3 预编译/构建目录")
                                                           : qsTr("Md3 库目录（外部引用）")
                                 text: ProjectGenerator.md3Path
                                 supportingText: ProjectGenerator.isValidMd3Path(text)
                                                  ? (window.copyLibrary
-                                                    ? qsTr("复制到 vendor/QML_MD3")
+                                                    ? qsTr("只复制 .a/.lib + 头文件 → vendor/Md3")
                                                     : qsTr("路径有效"))
-                                                 : qsTr("需包含 CMakeLists.txt")
+                                                 : (window.copyLibrary
+                                                    ? qsTr("需含 libMd3.a/.lib（或源码旁的 build）")
+                                                    : qsTr("需包含 CMakeLists.txt"))
                                 error: text.length > 0 && !ProjectGenerator.isValidMd3Path(text)
                                 onTextChanged: ProjectGenerator.md3Path = text
                             }
@@ -556,7 +558,7 @@ Md3ApplicationWindow {
                                 }
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: qsTr("把库复制进项目")
+                                    text: qsTr("复制预编译库进项目")
                                     color: Md3Theme.colorScheme.colorOnSurface
                                     font.family: Md3Theme.typography.fontFamily
                                     font.pixelSize: 12

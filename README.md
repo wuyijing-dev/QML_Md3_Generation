@@ -1,14 +1,15 @@
 # Md3 Create
 
-用 **Md3 QML 界面** 新建 Material Design 3 Qt Quick 工程（对标 Qt Creator「新建项目」），并自动接入同级的 [QML_MD3](../QML_MD3) 组件库。
+用 **Md3 QML 界面** 新建 Material Design 3 Qt Quick 工程（对标 Qt Creator「新建项目」），并接入 [QML_MD3](https://github.com/wuyijing-dev/QML_MD3) 组件库（路径由 `MD3_ROOT` 指定）。
 
 ## 功能
 
 - **多选编译器 / Kit**（扫描 Qt 根目录，或「添加」自定义前缀）
 - **自动去重项目名**（`MyApp` → `MyApp2`…；可选覆盖同名目录）
-- **把 Md3 库复制进项目**（默认 `vendor/QML_MD3`，或改为外部引用）
+- **复制预编译 Md3 进项目**（默认：`.a`/`.lib` + 头文件 + stubs → `vendor/Md3`；也可改为外部 `add_subdirectory` 引用源码）
 - 选择模板：`empty` / `basic` / `rail`
 - 生成完整 CMake 工程 + 每个 Kit 一份 `CMakePresets`
+
 构建生成工程示例：
 
 ```powershell
@@ -19,14 +20,29 @@ cmake --build --preset default
 
 ## 构建本向导
 
+需要本机已有 [QML_MD3](https://github.com/wuyijing-dev/QML_MD3) 源码（路径用 `-DMD3_ROOT` 指定，不必与本仓库同级）。
+
+```bash
+# Linux / macOS
+cmake -S . -B build -G Ninja \
+  -DMD3_ROOT="$HOME/path/to/QML_MD3" \
+  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.10.2/gcc_64"   # 按本机 Qt 改；系统包可省略
+cmake --build build -j"$(nproc)"
+./build/Md3Create
+```
+
 ```powershell
-cd D:\QML_MD3\md3-create
-cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=D:/Qt/6.10.2/mingw_64
+# Windows
+cmake -S . -B build -G Ninja `
+  -DMD3_ROOT="D:/QML_MD3/QML_MD3" `
+  -DCMAKE_PREFIX_PATH="D:/Qt/6.10.2/mingw_64"
 cmake --build build
 .\build\Md3Create.exe
 ```
 
-或在 Qt Creator 中打开本目录的 `CMakeLists.txt`。
+未指定 `MD3_ROOT` 时会尝试常见位置（同级 `../QML_MD3`、`$MD3_ROOT` 环境变量、`~/QML_MD3` 等）。
+
+或在 Qt Creator 中打开本目录的 `CMakeLists.txt`，在 CMake 变量里设置 `MD3_ROOT`。
 
 ## 生成工程后
 

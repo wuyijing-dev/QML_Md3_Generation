@@ -13,8 +13,30 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS
 )
 qt_standard_project_setup(REQUIRES 6.8)
 
+# Path to QML_MD3 sources (not hardcoded). Override with -DMD3_ROOT=...
+set(MD3_ROOT "" CACHE PATH "Path to QML_MD3 repository (contains src/Md3)")
+if (NOT MD3_ROOT)
+    foreach (_cand IN ITEMS
+            "${CMAKE_CURRENT_SOURCE_DIR}/../QML_MD3"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../QML_Md3"
+            "$ENV{MD3_ROOT}"
+            "$ENV{HOME}/QML_MD3"
+            "$ENV{HOME}/md3_generation/QML_MD3")
+        if (_cand AND EXISTS "${_cand}/CMakeLists.txt" AND EXISTS "${_cand}/src/Md3")
+            set(MD3_ROOT "${_cand}" CACHE PATH "Path to QML_MD3 repository (contains src/Md3)" FORCE)
+            break()
+        endif()
+    endforeach()
+endif()
+if (NOT MD3_ROOT OR NOT EXISTS "${MD3_ROOT}/CMakeLists.txt")
+    message(FATAL_ERROR
+        "QML_MD3 not found. Set -DMD3_ROOT=/path/to/QML_MD3 "
+        "(repo root with src/Md3), or clone it as a sibling of this project.")
+endif()
+message(STATUS "Md3Create: MD3_ROOT=${MD3_ROOT}")
+
 set(MD3_BUILD_GALLERY OFF CACHE BOOL "Skip Gallery" FORCE)
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../QML_MD3" "${CMAKE_CURRENT_BINARY_DIR}/md3")
+add_subdirectory("${MD3_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/md3")
 
 qt_add_executable(md3_create main.cpp)
 

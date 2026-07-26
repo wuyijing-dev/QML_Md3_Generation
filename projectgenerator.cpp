@@ -4,7 +4,6 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -13,7 +12,6 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QStandardPaths>
-#include <QSet>
 
 ProjectGenerator::ProjectGenerator(QObject *parent)
     : QObject(parent)
@@ -61,11 +59,54 @@ bool ProjectGenerator::isValidMd3Path(const QString &path) const
     const QString p = QDir::cleanPath(path);
     if (QFileInfo::exists(p + QStringLiteral("/CMakeLists.txt")))
         return true;
-    // Allow pointing at src/Md3
     if (QFileInfo::exists(p + QStringLiteral("/src/Md3/CMakeLists.txt")))
+        return true;
+    // Prebuilt build tree (contains libMd3)
+    if (!findPrebuiltMd3Dir(p).isEmpty())
         return true;
     return QFileInfo::exists(p + QStringLiteral("/../CMakeLists.txt"))
             && QFileInfo(p).fileName() == QLatin1String("Md3");
+}
+
+QString ProjectGenerator::findPrebuiltMd3Dir(const QString &path) const
+{
+    const QString p = QDir::cleanPath(path);
+    auto hasLib = [](const QString &dir) {
+        return QFileInfo::exists(dir + QStringLiteral("/libMd3.a"))
+                || QFileInfo::exists(dir + QStringLiteral("/libMd3.lib"))
+                || QFileInfo::exists(dir + QStringLiteral("/Md3.lib"));
+    };
+
+    QStringList candidates;
+    candidates << p
+               << p + QStringLiteral("/src/Md3")
+               << p + QStringLiteral("/build-lib/src/Md3")
+               << p + QStringLiteral("/build/src/Md3")
+               << p + QStringLiteral("/build-mingw/src/Md3")
+               << p + QStringLiteral("/build-mingw/md3/src/Md3");
+
+    // Sibling md3-create build (common local layout)
+    const QString siblingCreate = QDir(p + QStringLiteral("/../md3-create")).absolutePath();
+    candidates << siblingCreate + QStringLiteral("/build-mingw/md3/src/Md3")
+               << siblingCreate + QStringLiteral("/build/md3/src/Md3");
+
+    // Walk one level of build* under repo for */src/Md3/libMd3.*
+    QDir root(p);
+    if (root.exists()) {
+        const QStringList builds = root.entryList(QStringList{QStringLiteral("build*")},
+                                                  QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString &b : builds) {
+            candidates << root.filePath(b + QStringLiteral("/src/Md3"));
+            candidates << root.filePath(b + QStringLiteral("/md3/src/Md3"));
+        }
+    }
+
+    for (const QString &c : candidates) {
+        const QString abs = QDir::cleanPath(c);
+        if (hasLib(abs))
+            return abs;
+    }
+    return {};
 }
 
 bool ProjectGenerator::projectExists(const QString &outputDir, const QString &name) const
@@ -290,76 +331,194 @@ bool ProjectGenerator::writeBytes(const QString &qrcPath, const QString &destFil
     return true;
 }
 
-static bool shouldSkipMd3CopyEntry(const QString &name)
+bool ProjectGenerator::copyOneFile(const QString &src, const QString &dst)
 {
-    static const QSet<QString> skip = {
-        QStringLiteral(".git"),
-        QStringLiteral(".github"),
-        QStringLiteral(".vs"),
-        QStringLiteral(".idea"),
-        QStringLiteral(".qtcreator"),
-        QStringLiteral("build"),
-        QStringLiteral("build-lib"),
-        QStringLiteral("build-mingw"),
-        QStringLiteral("build-mingw-check"),
-        QStringLiteral("out"),
-        QStringLiteral("dist"),
-        QStringLiteral("cmake-build-debug"),
-        QStringLiteral("cmake-build-release"),
-        QStringLiteral("node_modules"),
-        QStringLiteral("__pycache__"),
-    };
-    if (skip.contains(name))
-        return true;
-    if (name.startsWith(QLatin1String("build")) || name.startsWith(QLatin1String("cmake-build")))
-        return true;
-    if (name.endsWith(QLatin1String(".user")))
-        return true;
-    return false;
+    QDir().mkpath(QFileInfo(dst).absolutePath());
+    if (QFile::exists(dst))
+        QFile::remove(dst);
+    return QFile::copy(src, dst);
 }
 
-bool ProjectGenerator::copyMd3IntoProject(const QString &srcRoot, const QString &destVendorDir)
+bool ProjectGenerator::copyPrebuiltMd3(const QString &sourceOrBuildPath, const QString &destVendorDir)
 {
-    const QString src = QDir::cleanPath(srcRoot);
-    if (!isValidMd3Path(src)) {
-        setError(QStringLiteral("无法复制：源库无效 %1").arg(src));
-        return false;
-    }
-    if (!QDir().mkpath(destVendorDir)) {
-        setError(QStringLiteral("无法创建库目录: %1").arg(destVendorDir));
+    const QString buildMd3 = findPrebuiltMd3Dir(sourceOrBuildPath);
+    if (buildMd3.isEmpty()) {
+        setError(QStringLiteral(
+            "未找到预编译 libMd3（.a/.lib）。请先编译 Md3，或选择含 libMd3.a 的构建目录"
+            "（例如 md3-create/build-mingw/md3/src/Md3）。"));
         return false;
     }
 
-    QDirIterator it(src, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
-                    QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        it.next();
-        const QFileInfo fi = it.fileInfo();
-        const QString rel = QDir(src).relativeFilePath(fi.absoluteFilePath());
-        const QStringList parts = rel.split(QLatin1Char('/'), Qt::SkipEmptyParts);
-        bool skip = false;
-        for (const QString &part : parts) {
-            if (shouldSkipMd3CopyEntry(part)) {
-                skip = true;
+    // Headers come from source tree next to the build, or from the given source path.
+    QString srcRoot = normalizeMd3Root(sourceOrBuildPath);
+    auto hasMd3Headers = [](const QString &root) {
+        return QFileInfo::exists(root + QStringLiteral("/src/Md3/md3.h"))
+                || QFileInfo::exists(root + QStringLiteral("/md3.h"));
+    };
+    if (!hasMd3Headers(srcRoot)) {
+        QDir d(buildMd3);
+        for (int i = 0; i < 8 && d.cdUp(); ++i) {
+            const QString abs = d.absolutePath();
+            if (hasMd3Headers(abs)) {
+                srcRoot = abs;
+                break;
+            }
+            // Sibling checkout: .../QML_MD3/QML_MD3 next to md3-create
+            const QString nested = abs + QStringLiteral("/QML_MD3");
+            if (hasMd3Headers(nested)) {
+                srcRoot = nested;
                 break;
             }
         }
-        if (skip)
-            continue;
-
-        const QString destPath = QDir(destVendorDir).filePath(rel);
-        if (fi.isDir()) {
-            QDir().mkpath(destPath);
-            continue;
+    }
+    if (!hasMd3Headers(srcRoot)) {
+        // md3-create lives beside the library repo
+        const QString beside = QDir::cleanPath(
+            QCoreApplication::applicationDirPath() + QStringLiteral("/../../QML_MD3"));
+        if (hasMd3Headers(beside))
+            srcRoot = beside;
+        else {
+            const QString beside2 = QDir::cleanPath(
+                QCoreApplication::applicationDirPath() + QStringLiteral("/../../../QML_MD3"));
+            if (hasMd3Headers(beside2))
+                srcRoot = beside2;
         }
-        QDir().mkpath(QFileInfo(destPath).absolutePath());
-        if (QFile::exists(destPath))
-            QFile::remove(destPath);
-        if (!QFile::copy(fi.absoluteFilePath(), destPath)) {
-            setError(QStringLiteral("复制失败: %1").arg(rel));
+    }
+
+    QString headerDir = srcRoot + QStringLiteral("/src/Md3");
+    if (!QFileInfo::exists(headerDir + QStringLiteral("/md3.h")))
+        headerDir = srcRoot;
+    if (!QFileInfo::exists(headerDir + QStringLiteral("/md3.h"))
+            && !QFileInfo::exists(headerDir + QStringLiteral("/window/md3graphics.h"))) {
+        setError(QStringLiteral("找不到头文件 md3.h（源码树）: %1").arg(srcRoot));
+        return false;
+    }
+
+    const QString libDir = destVendorDir + QStringLiteral("/lib");
+    const QString incDir = destVendorDir + QStringLiteral("/include/Md3");
+    const QString qmlDir = destVendorDir + QStringLiteral("/qml/Md3");
+    const QString stubDir = destVendorDir + QStringLiteral("/stubs");
+    QDir().mkpath(libDir);
+    QDir().mkpath(incDir);
+    QDir().mkpath(qmlDir);
+    QDir().mkpath(stubDir);
+
+    // Core static libs
+    QString md3LibSrc;
+    for (const char *n : {"libMd3.a", "libMd3.lib", "Md3.lib"}) {
+        const QString cand = buildMd3 + QLatin1Char('/') + QLatin1String(n);
+        if (QFileInfo::exists(cand)) {
+            md3LibSrc = cand;
+            break;
+        }
+    }
+    if (md3LibSrc.isEmpty()) {
+        setError(QStringLiteral("缺少 libMd3"));
+        return false;
+    }
+    if (!copyOneFile(md3LibSrc, libDir + QLatin1Char('/') + QFileInfo(md3LibSrc).fileName())) {
+        setError(QStringLiteral("复制 libMd3 失败"));
+        return false;
+    }
+
+    QString pluginLibSrc = buildMd3 + QStringLiteral("/Md3/libMd3plugin.a");
+    if (!QFileInfo::exists(pluginLibSrc))
+        pluginLibSrc = buildMd3 + QStringLiteral("/Md3/Md3plugin.lib");
+    if (!QFileInfo::exists(pluginLibSrc))
+        pluginLibSrc = buildMd3 + QStringLiteral("/libMd3plugin.a");
+    if (QFileInfo::exists(pluginLibSrc)) {
+        if (!copyOneFile(pluginLibSrc, libDir + QLatin1Char('/') + QFileInfo(pluginLibSrc).fileName())) {
+            setError(QStringLiteral("复制 Md3plugin 失败"));
             return false;
         }
     }
+
+    // Headers only (not full QML sources)
+    const QStringList headers = {
+        QStringLiteral("md3.h"),
+        QStringLiteral("window/md3graphics.h"),
+        QStringLiteral("window/md3windowhelper.h"),
+        QStringLiteral("charts/md3chartdata.h"),
+    };
+    for (const QString &h : headers) {
+        const QString src = headerDir + QLatin1Char('/') + h;
+        if (!QFileInfo::exists(src))
+            continue;
+        const QString dstName = QFileInfo(h).fileName();
+        if (!copyOneFile(src, incDir + QLatin1Char('/') + dstName)) {
+            setError(QStringLiteral("复制头文件失败: %1").arg(h));
+            return false;
+        }
+    }
+
+    // Module metadata only (qmldir / qmltypes) — not .qml sources
+    const QString modDir = buildMd3 + QStringLiteral("/Md3");
+    for (const char *meta : {"qmldir", "Md3.qmltypes"}) {
+        const QString src = modDir + QLatin1Char('/') + QLatin1String(meta);
+        if (QFileInfo::exists(src))
+            copyOneFile(src, qmlDir + QLatin1Char('/') + QLatin1String(meta));
+    }
+
+    // Tiny static-plugin / rcc init stubs (required for static QML link)
+    QStringList stubSrcs;
+    const QString pluginInit = buildMd3 + QStringLiteral("/Md3plugin_init.cpp");
+    if (QFileInfo::exists(pluginInit))
+        stubSrcs << pluginInit;
+
+    QDir rccDir(buildMd3 + QStringLiteral("/.qt/rcc"));
+    if (rccDir.exists()) {
+        const QStringList inits = rccDir.entryList(QStringList{QStringLiteral("*_init.cpp")},
+                                                   QDir::Files);
+        for (const QString &f : inits)
+            stubSrcs << rccDir.filePath(f);
+    }
+    // Also gather from CMakeFiles object dirs if only .obj available — prefer .cpp
+    for (const QString &s : stubSrcs) {
+        if (!copyOneFile(s, stubDir + QLatin1Char('/') + QFileInfo(s).fileName())) {
+            setError(QStringLiteral("复制 stub 失败: %1").arg(s));
+            return false;
+        }
+    }
+
+    // Generate imported-target helper
+    const QString md3LibName = QFileInfo(md3LibSrc).fileName();
+    const QString pluginLibName = QFileInfo::exists(pluginLibSrc)
+            ? QFileInfo(pluginLibSrc).fileName() : QString();
+
+    QString cmake;
+    cmake += QStringLiteral("# Auto-generated — prebuilt Md3 (no full sources)\n");
+    cmake += QStringLiteral("get_filename_component(_MD3_PREBUILT_DIR \"${CMAKE_CURRENT_LIST_DIR}\" ABSOLUTE)\n");
+    cmake += QStringLiteral("add_library(Md3 STATIC IMPORTED GLOBAL)\n");
+    cmake += QStringLiteral("set_target_properties(Md3 PROPERTIES\n");
+    cmake += QStringLiteral("  IMPORTED_LOCATION \"${_MD3_PREBUILT_DIR}/lib/%1\"\n").arg(md3LibName);
+    cmake += QStringLiteral("  INTERFACE_INCLUDE_DIRECTORIES \"${_MD3_PREBUILT_DIR}/include/Md3;${_MD3_PREBUILT_DIR}/include\"\n");
+    cmake += QStringLiteral("  INTERFACE_LINK_LIBRARIES \"Qt6::Quick;Qt6::QuickControls2;Qt6::QuickEffects;Qt6::QuickShapesPrivate\"\n");
+    cmake += QStringLiteral(")\n");
+    cmake += QStringLiteral("if (WIN32)\n");
+    cmake += QStringLiteral("  set_property(TARGET Md3 APPEND PROPERTY\n");
+    cmake += QStringLiteral("    INTERFACE_LINK_LIBRARIES dwmapi shell32 shlwapi ole32 propsys advapi32)\n");
+    cmake += QStringLiteral("endif()\n");
+    if (!pluginLibName.isEmpty()) {
+        cmake += QStringLiteral("add_library(Md3plugin STATIC IMPORTED GLOBAL)\n");
+        cmake += QStringLiteral("set_target_properties(Md3plugin PROPERTIES\n");
+        cmake += QStringLiteral("  IMPORTED_LOCATION \"${_MD3_PREBUILT_DIR}/lib/%1\"\n").arg(pluginLibName);
+        cmake += QStringLiteral(")\n");
+    }
+    // Compile init stubs into a small static helper
+    cmake += QStringLiteral("file(GLOB _MD3_STUBS CONFIGURE_DEPENDS \"${_MD3_PREBUILT_DIR}/stubs/*.cpp\")\n");
+    cmake += QStringLiteral("if (_MD3_STUBS)\n");
+    cmake += QStringLiteral("  add_library(Md3plugin_init STATIC ${_MD3_STUBS})\n");
+    cmake += QStringLiteral("  target_link_libraries(Md3plugin_init PUBLIC Qt6::Qml Qt6::Quick)\n");
+    cmake += QStringLiteral("endif()\n");
+    cmake += QStringLiteral("list(APPEND CMAKE_QML_IMPORT_PATH \"${_MD3_PREBUILT_DIR}/qml\")\n");
+    cmake += QStringLiteral("set(CMAKE_QML_IMPORT_PATH \"${CMAKE_QML_IMPORT_PATH}\" CACHE STRING \"\" FORCE)\n");
+
+    QFile out(destVendorDir + QStringLiteral("/Md3Prebuilt.cmake"));
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        setError(QStringLiteral("无法写入 Md3Prebuilt.cmake"));
+        return false;
+    }
+    out.write(cmake.toUtf8());
     return true;
 }
 
@@ -379,7 +538,7 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     const bool md3Absolute = options.value(QStringLiteral("md3Absolute")).toBool();
     const bool copyLibrary = options.value(QStringLiteral("copyLibrary")).toBool();
     const QString vendorFolder = options.value(QStringLiteral("vendorFolder"),
-                                               QStringLiteral("vendor/QML_MD3")).toString().trimmed();
+                                               QStringLiteral("vendor/Md3")).toString().trimmed();
 
     // Auto-dedupe project folder name unless force overwrite
     QString name = requestedName;
@@ -432,7 +591,17 @@ bool ProjectGenerator::generate(const QVariantMap &options)
         setBusy(false);
         return false;
     }
-    if (!isValidMd3Path(md3Override)) {
+    if (copyLibrary) {
+        const QString probe = options.value(QStringLiteral("md3Path")).toString().trimmed();
+        const QString look = probe.isEmpty() ? md3Override : probe;
+        if (findPrebuiltMd3Dir(look).isEmpty()) {
+            setError(QStringLiteral(
+                "未找到预编译 libMd3。请先编译组件库，或把路径指到含 libMd3.a/.lib 的构建目录"
+                "（如 …/build-mingw/md3/src/Md3）。"));
+            setBusy(false);
+            return false;
+        }
+    } else if (!isValidMd3Path(md3Override)) {
         setError(QStringLiteral("Md3 库目录无效: %1").arg(md3Override));
         setBusy(false);
         return false;
@@ -448,7 +617,6 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     if (destDir.exists()) {
         const QStringList entries = destDir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot);
         if (!entries.isEmpty() && !force) {
-            // Should be rare after uniqueProjectName; still guard
             setError(QStringLiteral("目标已存在且非空: %1").arg(dest));
             setBusy(false);
             return false;
@@ -459,31 +627,28 @@ bool ProjectGenerator::generate(const QVariantMap &options)
         return false;
     }
 
-    // Optionally vendor a copy of the library into the new project
-    QString md3SourceForCmake = md3Override;
+    QString md3CmakeBlock;
+    QString md3ForCmake;
+    QString absMd3;
+
     if (copyLibrary) {
-        QString vendorRel = vendorFolder.isEmpty() ? QStringLiteral("vendor/QML_MD3") : vendorFolder;
+        QString vendorRel = vendorFolder.isEmpty() ? QStringLiteral("vendor/Md3") : vendorFolder;
         vendorRel.replace(QLatin1Char('\\'), QLatin1Char('/'));
         while (vendorRel.startsWith(QLatin1Char('/')))
             vendorRel.remove(0, 1);
         const QString vendorAbs = destDir.filePath(vendorRel);
-        if (!copyMd3IntoProject(md3Override, vendorAbs)) {
+        const QString probe = options.value(QStringLiteral("md3Path")).toString().trimmed();
+        const QString copyFrom = probe.isEmpty() ? md3Override : probe;
+        if (!copyPrebuiltMd3(copyFrom, vendorAbs)) {
             setBusy(false);
             return false;
         }
-        md3SourceForCmake = vendorRel; // always relative when vendored
-    }
-
-    QString target = name.toLower();
-    target.replace(QRegularExpression(QStringLiteral("[^a-z0-9_]")), QStringLiteral("_"));
-    if (!target.isEmpty() && target[0].isDigit())
-        target.prepend(QStringLiteral("app_"));
-
-    QString md3ForCmake;
-    QString absMd3;
-    if (copyLibrary) {
-        md3ForCmake = md3SourceForCmake;
-        absMd3 = cmakePath(destDir.filePath(md3SourceForCmake));
+        md3ForCmake = vendorRel;
+        absMd3 = cmakePath(vendorAbs);
+        md3CmakeBlock =
+            QStringLiteral("# Prebuilt Md3 (libs + headers only)\n"
+                           "include(\"${CMAKE_CURRENT_SOURCE_DIR}/%1/Md3Prebuilt.cmake\")\n")
+                .arg(vendorRel);
     } else {
         absMd3 = cmakePath(md3Override);
         if (md3Absolute) {
@@ -493,7 +658,22 @@ bool ProjectGenerator::generate(const QVariantMap &options)
             const QString rel = QDir(absDest).relativeFilePath(absMd3);
             md3ForCmake = rel.isEmpty() ? absMd3 : rel;
         }
+        md3CmakeBlock =
+            QStringLiteral(
+                "# Md3 sources via add_subdirectory — override with -DMD3_ROOT=...\n"
+                "set(MD3_ROOT \"%1\" CACHE PATH \"Path to QML_MD3 repository\")\n"
+                "if (NOT EXISTS \"${MD3_ROOT}/CMakeLists.txt\")\n"
+                "    message(FATAL_ERROR \"MD3_ROOT invalid (no CMakeLists.txt): ${MD3_ROOT}\")\n"
+                "endif()\n"
+                "set(MD3_BUILD_GALLERY OFF CACHE BOOL \"Skip Gallery demo\" FORCE)\n"
+                "add_subdirectory(\"${MD3_ROOT}\" \"${CMAKE_CURRENT_BINARY_DIR}/md3\")\n")
+                .arg(md3ForCmake);
     }
+
+    QString target = name.toLower();
+    target.replace(QRegularExpression(QStringLiteral("[^a-z0-9_]")), QStringLiteral("_"));
+    if (!target.isEmpty() && target[0].isDigit())
+        target.prepend(QStringLiteral("app_"));
 
     // Use first kit for find_package version floor
     const QVariantMap firstKit = selectedKits.first().toMap();
@@ -523,6 +703,7 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     vars.insert(QStringLiteral("QT_PREFIX"), cmakePath(qtPrefix));
     vars.insert(QStringLiteral("MD3_PATH"), md3ForCmake);
     vars.insert(QStringLiteral("MD3_PATH_ABS"), absMd3);
+    vars.insert(QStringLiteral("MD3_CMAKE_BLOCK"), md3CmakeBlock);
     vars.insert(QStringLiteral("TEMPLATE"), tmpl);
     vars.insert(QStringLiteral("DARK_DEFAULT"), dark ? QStringLiteral("true") : QStringLiteral("false"));
     vars.insert(QStringLiteral("SEED_COLOR"), seed);
@@ -587,8 +768,10 @@ bool ProjectGenerator::generate(const QVariantMap &options)
             {QStringLiteral("CMAKE_BUILD_TYPE"), QStringLiteral("Debug")},
             {QStringLiteral("CMAKE_PREFIX_PATH"), prefix},
             {QStringLiteral("CMAKE_CXX_STANDARD"), QStringLiteral("17")},
-            {QStringLiteral("MD3_ROOT"), absMd3},
         };
+        // External source tree only — prebuilt vendor uses Md3Prebuilt.cmake
+        if (!copyLibrary)
+            cache.insert(QStringLiteral("MD3_ROOT"), absMd3);
 
         configurePresets.append(QJsonObject{
             {QStringLiteral("name"), presetName},

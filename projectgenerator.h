@@ -37,8 +37,11 @@ public:
     Q_INVOKABLE bool addCustomKit(const QString &prefixPath);
     Q_INVOKABLE bool generate(const QVariantMap &options);
 
-    /// Validate that path looks like a QML_MD3 / Md3 source tree.
+    /// True if path is Md3 source repo OR a directory containing prebuilt libMd3.
     Q_INVOKABLE bool isValidMd3Path(const QString &path) const;
+
+    /// Resolve a folder that contains libMd3(.a/.lib) from a source or build path.
+    Q_INVOKABLE QString findPrebuiltMd3Dir(const QString &path) const;
 
     /// Return a unique project folder name under outputDir (MyApp, MyApp2, …).
     Q_INVOKABLE QString uniqueProjectName(const QString &outputDir, const QString &baseName) const;
@@ -67,7 +70,9 @@ private:
     bool writeRendered(const QString &qrcPath, const QString &destFile,
                        const QMap<QString, QString> &vars);
     bool writeBytes(const QString &qrcPath, const QString &destFile);
-    bool copyMd3IntoProject(const QString &srcRoot, const QString &destVendorDir);
+    /// Copy only prebuilt libs/headers/init stubs into vendor/Md3 (not full sources).
+    bool copyPrebuiltMd3(const QString &sourceOrBuildPath, const QString &destVendorDir);
+    static bool copyOneFile(const QString &src, const QString &dst);
 
     QVariantList m_kits;
     QString m_qtRoot;

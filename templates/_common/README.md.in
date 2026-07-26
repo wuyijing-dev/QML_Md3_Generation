@@ -33,4 +33,4 @@ Md3Theme.dark = true
 Md3Theme.applySeed("{{SEED_COLOR}}")
 ```
 
-API docs: `{{MD3_PATH}}/docs/api/README.md`
+When using a vendored prebuilt tree (`vendor/Md3`), docs live in the original QML_MD3 repo.
