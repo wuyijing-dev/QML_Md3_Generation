@@ -1,0 +1,10 @@
+#include "md3.h"
+
+int main(int argc, char *argv[])
+{
+    Md3::RunOptions opts;
+    opts.organization = QStringLiteral("{{PROJECT_NAME}}");
+    opts.applicationName = QStringLiteral("{{APP_TITLE}}");
+    opts.applicationVersion = QStringLiteral("0.1.0");
+    return Md3::run(argc, argv, QStringLiteral("{{QML_URI}}"), QStringLiteral("Main"), opts);
+}

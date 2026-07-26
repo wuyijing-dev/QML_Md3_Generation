@@ -1,0 +1,33 @@
+import QtQuick
+import Md3
+
+Item {
+    Column {
+        anchors.fill: parent
+        anchors.margins: 8
+        spacing: 12
+
+        Text {
+            text: qsTr("组件")
+            color: Md3Theme.colorScheme.colorOnSurface
+            font.family: Md3Theme.typography.fontFamily
+            font.pixelSize: Md3Theme.typography.headlineMedium.size
+        }
+
+        Flow {
+            width: parent.width
+            spacing: 8
+            Md3Button { text: qsTr("Filled"); onClicked: snack.show(qsTr("Filled")) }
+            Md3Button { text: qsTr("Tonal"); variant: Md3Button.FilledTonal; onClicked: snack.show(qsTr("Tonal")) }
+            Md3Button { text: qsTr("Outlined"); variant: Md3Button.Outlined; onClicked: snack.show(qsTr("Outlined")) }
+            Md3FilterChip { text: qsTr("Filter"); selected: true }
+            Md3AssistChip { text: qsTr("Assist"); icon: "star" }
+        }
+
+        Md3Snackbar {
+            id: snack
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: parent.height - 48
+        }
+    }
+}

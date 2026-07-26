@@ -1,0 +1,75 @@
+import QtQuick
+import Md3
+
+Md3ApplicationWindow {
+    id: window
+    width: 480
+    height: 720
+    visible: true
+    title: qsTr("{{APP_TITLE}}")
+    color: Md3Theme.colorScheme.surface
+
+    Component.onCompleted: {
+        Md3Theme.dark = {{DARK_DEFAULT}}
+        Md3Theme.applySeed("{{SEED_COLOR}}")
+    }
+
+    Column {
+        anchors.centerIn: parent
+        spacing: 16
+
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: qsTr("{{APP_TITLE}}")
+            color: Md3Theme.colorScheme.primary
+            font.family: Md3Theme.typography.fontFamily
+            font.pixelSize: Md3Theme.typography.headlineLarge.size
+            font.weight: Font.Bold
+        }
+
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 320
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            text: qsTr("Generated with md3-create · powered by QML_MD3")
+            color: Md3Theme.colorScheme.colorOnSurfaceVariant
+            font.family: Md3Theme.typography.fontFamily
+            font.pixelSize: Md3Theme.typography.bodyMedium.size
+        }
+
+        Md3Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: qsTr("Filled")
+            variant: Md3Button.Filled
+            onClicked: snack.show(qsTr("Hello Md3"))
+        }
+
+        Md3Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: qsTr("Toggle theme")
+            variant: Md3Button.Outlined
+            onClicked: Md3Theme.dark = !Md3Theme.dark
+        }
+
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: 12
+            Md3Switch { id: demoSwitch }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: demoSwitch.checked ? qsTr("On") : qsTr("Off")
+                color: Md3Theme.colorScheme.colorOnSurface
+                font.family: Md3Theme.typography.fontFamily
+                font.pixelSize: Md3Theme.typography.bodyLarge.size
+            }
+        }
+    }
+
+    Md3Snackbar {
+        id: snack
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+    }
+}

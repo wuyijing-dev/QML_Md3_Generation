@@ -1,0 +1,18 @@
+# Build
+/build/
+/out/
+/cmake-build-*/
+
+# IDE
+CMakeLists.txt.user*
+*.pro.user*
+.vs/
+.idea/
+
+# Artifacts
+*.qmlc
+*.obj
+*.o
+*.exe
+*.pdb
+*.user

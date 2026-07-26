@@ -1,0 +1,24 @@
+import QtQuick
+import Md3
+
+Md3ApplicationWindow {
+    id: window
+    width: 960
+    height: 640
+    visible: true
+    title: qsTr("{{APP_TITLE}}")
+    color: Md3Theme.colorScheme.surface
+
+    Component.onCompleted: {
+        Md3Theme.dark = {{DARK_DEFAULT}}
+        Md3Theme.applySeed("{{SEED_COLOR}}")
+    }
+
+    Text {
+        anchors.centerIn: parent
+        text: qsTr("{{APP_TITLE}}")
+        color: Md3Theme.colorScheme.colorOnSurface
+        font.family: Md3Theme.typography.fontFamily
+        font.pixelSize: Md3Theme.typography.headlineMedium.size
+    }
+}

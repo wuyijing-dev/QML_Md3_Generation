@@ -1,0 +1,38 @@
+import QtQuick
+import Md3
+
+Md3ApplicationWindow {
+    id: window
+    width: 1100
+    height: 720
+    visible: true
+    title: qsTr("{{APP_TITLE}}")
+    color: Md3Theme.colorScheme.surface
+    navigationRail: true
+    railExpanded: false
+    railHeader: qsTr("{{APP_TITLE}}")
+    pagePadding: 20
+    pageTransition: "fade"
+
+    Component.onCompleted: {
+        Md3Theme.dark = {{DARK_DEFAULT}}
+        Md3Theme.applySeed("{{SEED_COLOR}}")
+    }
+
+    readonly property string pageRoot: "qrc:/qt/qml/{{QML_URI}}/pages/"
+
+    destinations: [
+        { title: qsTr("首页"), icon: "home", source: pageRoot + "HomePage.qml" },
+        { title: qsTr("组件"), icon: "widgets", source: pageRoot + "WidgetsPage.qml" },
+        { title: qsTr("设置"), icon: "settings", source: pageRoot + "SettingsPage.qml" }
+    ]
+
+    titleBar: Component {
+        Md3TitleBar {
+            title: window.title
+            showThemeToggle: true
+            preferredHeight: 32
+            barHeight: 32
+        }
+    }
+}

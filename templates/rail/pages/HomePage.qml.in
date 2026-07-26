@@ -1,0 +1,36 @@
+import QtQuick
+import Md3
+
+Item {
+    Column {
+        anchors.fill: parent
+        anchors.margins: 8
+        spacing: 12
+
+        Text {
+            text: qsTr("首页")
+            color: Md3Theme.colorScheme.colorOnSurface
+            font.family: Md3Theme.typography.fontFamily
+            font.pixelSize: Md3Theme.typography.headlineMedium.size
+        }
+        Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: qsTr("这是 md3-create 的 rail 模板。左侧 NavigationRail + Md3PageHost 已由 Md3ApplicationWindow 托管。")
+            color: Md3Theme.colorScheme.colorOnSurfaceVariant
+            font.family: Md3Theme.typography.fontFamily
+            font.pixelSize: Md3Theme.typography.bodyMedium.size
+        }
+        Md3Card {
+            variant: Md3Card.Filled
+            width: parent.width
+            height: 120
+            Text {
+                anchors.centerIn: parent
+                text: qsTr("Md3Card")
+                color: Md3Theme.colorScheme.colorOnSurface
+                font.family: Md3Theme.typography.fontFamily
+            }
+        }
+    }
+}

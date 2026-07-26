@@ -1,0 +1,37 @@
+import QtQuick
+import Md3
+
+Item {
+    Column {
+        anchors.fill: parent
+        anchors.margins: 8
+        spacing: 16
+
+        Text {
+            text: qsTr("设置")
+            color: Md3Theme.colorScheme.colorOnSurface
+            font.family: Md3Theme.typography.fontFamily
+            font.pixelSize: Md3Theme.typography.headlineMedium.size
+        }
+
+        Row {
+            spacing: 12
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("深色模式")
+                color: Md3Theme.colorScheme.colorOnSurface
+                font.family: Md3Theme.typography.fontFamily
+            }
+            Md3Switch {
+                checked: Md3Theme.dark
+                onCheckedChanged: Md3Theme.dark = checked
+            }
+        }
+
+        Md3Button {
+            text: qsTr("应用种子色 {{SEED_COLOR}}")
+            variant: Md3Button.Outlined
+            onClicked: Md3Theme.applySeed("{{SEED_COLOR}}")
+        }
+    }
+}
