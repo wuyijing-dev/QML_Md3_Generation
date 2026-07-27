@@ -28,6 +28,7 @@ Md3ApplicationWindow {
     property bool md3Absolute: false
     property bool copyLibrary: true
     property string md3Linkage: "auto" // auto | shared | static
+    property string buildType: "Release" // Debug | Release | RelWithDebInfo | MinSizeRel
     property bool autoDedupeName: true
     property string resolvedName: "MyMd3App"
     readonly property var templateIds: ["empty", "basic", "rail"]
@@ -171,6 +172,7 @@ Md3ApplicationWindow {
             md3Absolute: copyLibrary ? false : md3Absolute,
             copyLibrary: copyLibrary,
             md3Linkage: md3Linkage,
+            buildType: buildType,
             vendorFolder: "Md3",
             dark: darkSwitch.checked,
             seed: seedField.text.trim() || "#6750A4",
@@ -651,6 +653,45 @@ Md3ApplicationWindow {
                             }
                         }
                         RowLayout {
+                            spacing: 8
+                            Text {
+                                text: qsTr("运行方式")
+                                color: Md3Theme.colorScheme.colorOnSurfaceVariant
+                                font.family: Md3Theme.typography.fontFamily
+                                font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: [
+                                    { id: "Release", label: qsTr("Release") },
+                                    { id: "Debug", label: qsTr("Debug") }
+                                ]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    radius: Md3Theme.shape.small
+                                    border.width: 1
+                                    border.color: window.buildType === modelData.id
+                                                  ? Md3Theme.colorScheme.primary
+                                                  : Md3Theme.colorScheme.outlineVariant
+                                    color: window.buildType === modelData.id
+                                           ? Md3Theme.colorScheme.secondaryContainer
+                                           : Md3Theme.colorScheme.surfaceContainerLow
+                                    implicitWidth: 82
+                                    implicitHeight: 28
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        color: Md3Theme.colorScheme.colorOnSurface
+                                        font.family: Md3Theme.typography.fontFamily
+                                        font.pixelSize: 11
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: window.buildType = modelData.id
+                                    }
+                                }
+                            }
+                        }
+                        RowLayout {
                             spacing: 20
                             Row {
                                 spacing: 8
@@ -687,7 +728,9 @@ Md3ApplicationWindow {
                                        + " / "
                                        + (window.md3Linkage === "auto" ? qsTr("自动")
                                           : (window.md3Linkage === "shared" ? qsTr("动态")
-                                             : qsTr("静态"))))
+                                             : qsTr("静态")))
+                                  + " / "
+                                  + window.buildType
                             color: Md3Theme.colorScheme.colorOnSurfaceVariant
                             font.family: Md3Theme.typography.fontFamily
                             font.pixelSize: 11

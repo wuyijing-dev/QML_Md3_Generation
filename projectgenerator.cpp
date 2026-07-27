@@ -814,6 +814,8 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     const bool copyLibrary = options.value(QStringLiteral("copyLibrary")).toBool();
     const QString md3Linkage = options.value(QStringLiteral("md3Linkage"),
                                              QStringLiteral("auto")).toString().trimmed().toLower();
+    const QString buildType = options.value(QStringLiteral("buildType"),
+                                            QStringLiteral("Release")).toString().trimmed();
     const QString vendorFolder = options.value(QStringLiteral("vendorFolder"),
                                                QStringLiteral("Md3")).toString().trimmed();
 
@@ -891,6 +893,14 @@ bool ProjectGenerator::generate(const QVariantMap &options)
             && md3Linkage != QLatin1String("shared")
             && md3Linkage != QLatin1String("static")) {
         setError(QStringLiteral("Md3 链接方式无效（应为 auto/shared/static）"));
+        setBusy(false);
+        return false;
+    }
+    if (buildType != QLatin1String("Debug")
+            && buildType != QLatin1String("Release")
+            && buildType != QLatin1String("RelWithDebInfo")
+            && buildType != QLatin1String("MinSizeRel")) {
+        setError(QStringLiteral("构建类型无效（Debug/Release/RelWithDebInfo/MinSizeRel）"));
         setBusy(false);
         return false;
     }
@@ -1054,7 +1064,7 @@ bool ProjectGenerator::generate(const QVariantMap &options)
             : QStringLiteral("${sourceDir}/build/%1").arg(presetName);
 
         QJsonObject cache{
-            {QStringLiteral("CMAKE_BUILD_TYPE"), QStringLiteral("Debug")},
+            {QStringLiteral("CMAKE_BUILD_TYPE"), buildType},
             {QStringLiteral("CMAKE_PREFIX_PATH"), prefix},
             {QStringLiteral("CMAKE_CXX_STANDARD"), QStringLiteral("17")},
         };
