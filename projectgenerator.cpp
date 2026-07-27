@@ -8,9 +8,6 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -991,6 +988,7 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     vars.insert(QStringLiteral("SEED_COLOR"), seed);
     vars.insert(QStringLiteral("APP_TITLE"), name);
     vars.insert(QStringLiteral("EXTRA_QML_FILES"), extraQml);
+    vars.insert(QStringLiteral("CMAKE_BUILD_TYPE"), buildType);
 
     const QString base = QStringLiteral(":/md3-create/templates");
     auto ok = [&](const QString &qrc, const QString &rel) {
@@ -1023,82 +1021,7 @@ bool ProjectGenerator::generate(const QVariantMap &options)
             { setBusy(false); return false; }
     }
 
-    // CMakePresets.json — one configure/build preset per selected kit
-    QJsonArray configurePresets;
-    QJsonArray buildPresets;
-    QString firstPresetName;
-    for (int i = 0; i < selectedKits.size(); ++i) {
-        const QVariantMap kit = selectedKits.at(i).toMap();
-        const QString ver = kit.value(QStringLiteral("version")).toString();
-        const QString kn = kit.value(QStringLiteral("kit")).toString();
-        const QString prefix = cmakePath(kit.value(QStringLiteral("prefix")).toString());
-        if (prefix.isEmpty() || !QFileInfo::exists(prefix))
-            continue;
-
-        QString presetName = QStringLiteral("%1-%2").arg(ver, kn);
-        presetName.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_.+-]")), QStringLiteral("_"));
-        if (presetName.isEmpty())
-            presetName = QStringLiteral("kit%1").arg(i);
-        if (firstPresetName.isEmpty())
-            firstPresetName = presetName;
-
-        const QString binDir = selectedKits.size() == 1
-            ? QStringLiteral("${sourceDir}/build")
-            : QStringLiteral("${sourceDir}/build/%1").arg(presetName);
-
-        QJsonObject cache{
-            {QStringLiteral("CMAKE_BUILD_TYPE"), buildType},
-            {QStringLiteral("CMAKE_PREFIX_PATH"), prefix},
-            {QStringLiteral("CMAKE_CXX_STANDARD"), QStringLiteral("17")},
-        };
-        // External source tree only — prebuilt vendor uses Md3Prebuilt.cmake
-        if (!copyLibrary)
-            cache.insert(QStringLiteral("MD3_ROOT"), absMd3);
-
-        configurePresets.append(QJsonObject{
-            {QStringLiteral("name"), presetName},
-            {QStringLiteral("displayName"),
-             kit.value(QStringLiteral("label")).toString().isEmpty()
-                 ? QStringLiteral("Qt %1 / %2").arg(ver, kn)
-                 : kit.value(QStringLiteral("label")).toString()},
-            {QStringLiteral("generator"), QStringLiteral("Ninja")},
-            {QStringLiteral("binaryDir"), binDir},
-            {QStringLiteral("cacheVariables"), cache},
-        });
-        buildPresets.append(QJsonObject{
-            {QStringLiteral("name"), presetName},
-            {QStringLiteral("configurePreset"), presetName},
-        });
-    }
-
-    // Alias "default" -> first kit for convenience
-    if (!firstPresetName.isEmpty() && firstPresetName != QLatin1String("default")) {
-        configurePresets.prepend(QJsonObject{
-            {QStringLiteral("name"), QStringLiteral("default")},
-            {QStringLiteral("displayName"), QStringLiteral("Default (%1)").arg(firstPresetName)},
-            {QStringLiteral("inherits"), QJsonArray{firstPresetName}},
-        });
-        buildPresets.prepend(QJsonObject{
-            {QStringLiteral("name"), QStringLiteral("default")},
-            {QStringLiteral("configurePreset"), QStringLiteral("default")},
-        });
-    }
-
-    if (!configurePresets.isEmpty()) {
-        QJsonObject root{
-            {QStringLiteral("version"), 6},
-            {QStringLiteral("cmakeMinimumRequired"), QJsonObject{
-                {QStringLiteral("major"), 3},
-                {QStringLiteral("minor"), 21},
-                {QStringLiteral("patch"), 0},
-            }},
-            {QStringLiteral("configurePresets"), configurePresets},
-            {QStringLiteral("buildPresets"), buildPresets},
-        };
-        QFile presets(destDir.filePath(QStringLiteral("CMakePresets.json")));
-        if (presets.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
-            presets.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    }
+    QFile::remove(destDir.filePath(QStringLiteral("CMakePresets.json")));
 
     m_lastOutput = dest;
     emit lastOutputChanged();

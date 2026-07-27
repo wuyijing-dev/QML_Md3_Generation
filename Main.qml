@@ -821,7 +821,7 @@ Md3ApplicationWindow {
                             }
                         }
                         RowLayout {
-                            spacing: 8
+                            spacing: 16
                             Text {
                                 text: qsTr("运行方式")
                                 color: Md3Theme.colorScheme.colorOnSurfaceVariant
@@ -829,27 +829,47 @@ Md3ApplicationWindow {
                                 font.pixelSize: 12
                             }
                             Item { Layout.fillWidth: true }
-                            Text {
-                                text: qsTr("Release")
-                                color: window.buildType === "Release"
-                                       ? Md3Theme.colorScheme.colorOnSurface
-                                       : Md3Theme.colorScheme.colorOnSurfaceVariant
-                                font.family: Md3Theme.typography.fontFamily
-                                font.pixelSize: 12
-                            }
-                            Md3Switch {
-                                checked: window.buildType === "Debug"
-                                onToggled: function (on) {
-                                    window.buildType = on ? "Debug" : "Release"
+                            Row {
+                                spacing: 8
+                                Md3Switch {
+                                    checked: window.buildType === "Release"
+                                    onToggled: function (on) {
+                                        if (on)
+                                            window.buildType = "Release"
+                                        else if (window.buildType === "Release")
+                                            window.buildType = "Debug"
+                                    }
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: qsTr("Release")
+                                    color: window.buildType === "Release"
+                                           ? Md3Theme.colorScheme.colorOnSurface
+                                           : Md3Theme.colorScheme.colorOnSurfaceVariant
+                                    font.family: Md3Theme.typography.fontFamily
+                                    font.pixelSize: 12
                                 }
                             }
-                            Text {
-                                text: qsTr("Debug")
-                                color: window.buildType === "Debug"
-                                       ? Md3Theme.colorScheme.colorOnSurface
-                                       : Md3Theme.colorScheme.colorOnSurfaceVariant
-                                font.family: Md3Theme.typography.fontFamily
-                                font.pixelSize: 12
+                            Row {
+                                spacing: 8
+                                Md3Switch {
+                                    checked: window.buildType === "Debug"
+                                    onToggled: function (on) {
+                                        if (on)
+                                            window.buildType = "Debug"
+                                        else if (window.buildType === "Debug")
+                                            window.buildType = "Release"
+                                    }
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: qsTr("Debug")
+                                    color: window.buildType === "Debug"
+                                           ? Md3Theme.colorScheme.colorOnSurface
+                                           : Md3Theme.colorScheme.colorOnSurfaceVariant
+                                    font.family: Md3Theme.typography.fontFamily
+                                    font.pixelSize: 12
+                                }
                             }
                         }
                         RowLayout {

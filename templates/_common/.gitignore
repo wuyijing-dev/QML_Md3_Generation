@@ -5,6 +5,8 @@
 
 # IDE
 CMakeLists.txt.user*
+CMakePresets.json
+CMakeUserPresets.json
 *.pro.user*
 .vs/
 .idea/

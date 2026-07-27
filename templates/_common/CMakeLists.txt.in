@@ -4,6 +4,16 @@ project({{PROJECT_NAME}} VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Default build type from md3-create (Qt Creator kit still overrides for multi-config generators).
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "{{CMAKE_BUILD_TYPE}}" CACHE STRING "Build type")
+endif()
+
+# Suggested Qt prefix from md3-create — Qt Creator usually sets this via the active kit.
+if (NOT DEFINED CMAKE_PREFIX_PATH OR CMAKE_PREFIX_PATH STREQUAL "")
+    list(PREPEND CMAKE_PREFIX_PATH "{{QT_PREFIX}}")
+endif()
+
 find_package(Qt6 {{QT_VERSION_MM}} REQUIRED COMPONENTS
     Quick
     QuickControls2
