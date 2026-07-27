@@ -9,19 +9,11 @@ find_package(Qt6 {{QT_VERSION_MM}} REQUIRED COMPONENTS
     QuickControls2
     QuickEffects
     QuickShapesPrivate
+    Widgets
 )
 qt_standard_project_setup(REQUIRES {{QT_VERSION_MM}})
 
 # ---- Md3: packaged library in the SAME directory as this CMakeLists.txt ----
-# Layout required:
-#   <this-project>/
-#     CMakeLists.txt
-#     Md3/                 ← fixed name (libs + cmake + headers)
-#       lib/
-#       include/
-#       lib/cmake/Md3/     or Md3Prebuilt.cmake
-#
-# The Md3 package must match your Qt kit (MSVC ↔ msvc2022_64, MinGW ↔ mingw_64).
 set(MD3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Md3" CACHE PATH
     "Md3 package next to this CMakeLists.txt")
 if (EXISTS "${MD3_DIR}/lib/cmake/Md3/Md3Config.cmake")
@@ -41,6 +33,7 @@ qt_add_executable({{TARGET_NAME}} main.cpp)
 qt_add_qml_module({{TARGET_NAME}}
     URI {{QML_URI}}
     VERSION 1.0
+    NO_CACHEGEN
     QML_FILES
         Main.qml
 {{EXTRA_QML_FILES}}
@@ -54,17 +47,18 @@ set_target_properties({{TARGET_NAME}} PROPERTIES
 target_link_libraries({{TARGET_NAME}} PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::Widgets
 )
 
-# ---- Link Md3 (shared vs static) ----
 if (Md3_SHARED)
-    # Shared: link core DLL only; QML plugin is discovered via CMAKE_QML_IMPORT_PATH.
     if (TARGET Md3::Md3)
         target_link_libraries({{TARGET_NAME}} PRIVATE Md3::Md3)
     endif()
+    if (TARGET Md3plugin)
+        target_link_libraries({{TARGET_NAME}} PRIVATE Md3plugin)
+    endif()
     target_compile_definitions({{TARGET_NAME}} PRIVATE MD3_SHARED)
 else()
-    # Static: whole-archive so QML registration symbols are not dropped.
     if (TARGET Md3::QmlPlugin)
         target_link_libraries({{TARGET_NAME}} PRIVATE Md3::QmlPlugin)
     else()
@@ -80,4 +74,25 @@ else()
             target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3>")
         endif()
     endif()
+endif()
+
+qt_import_qml_plugins({{TARGET_NAME}})
+
+if (EXISTS "${MD3_DIR}/lib/cmake/Md3/Md3DeployShared.cmake")
+    include("${MD3_DIR}/lib/cmake/Md3/Md3DeployShared.cmake")
+endif()
+if (COMMAND md3_deploy_shared_runtime)
+    md3_deploy_shared_runtime({{TARGET_NAME}} "${MD3_DIR}")
+elseif (Md3_SHARED AND WIN32 AND EXISTS "${MD3_DIR}/bin/Md3.dll")
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(WARNING
+            "Md3: Debug build with Release-only package — use Release kit or repackage Md3.")
+    endif()
+    add_custom_command(TARGET {{TARGET_NAME}} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MD3_DIR}/bin/Md3.dll" "$<TARGET_FILE_DIR:{{TARGET_NAME}}>"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${MD3_DIR}/lib/qml" "$<TARGET_FILE_DIR:{{TARGET_NAME}}>/qml"
+        COMMENT "Deploy shared Md3 beside {{TARGET_NAME}}"
+    )
 endif()
