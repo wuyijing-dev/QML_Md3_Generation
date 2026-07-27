@@ -4,12 +4,12 @@ import Md3
 
 Md3ApplicationWindow {
     id: window
-    width: 640
-    height: 360
+    width: 680
+    height: 520
     minimumWidth: 560
-    minimumHeight: 320
-    maximumWidth: 720
-    maximumHeight: 420
+    minimumHeight: 420
+    maximumWidth: 800
+    maximumHeight: 720
     visible: true
     title: qsTr("新建 Md3 项目")
     color: Md3Theme.colorScheme.surface
@@ -345,15 +345,18 @@ Md3ApplicationWindow {
                     value: window.step >= window.stepCount ? 1 : (window.step + 1) / window.stepCount
                 }
 
-                StackLayout {
-                    id: stack
+                // StackLayout sizes to the tallest step and can push footer buttons off-screen.
+                Item {
+                    id: stepHost
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    currentIndex: Math.min(window.step, window.stepCount - 1)
+                    Layout.minimumHeight: 0
                     visible: window.step < window.stepCount
 
                     // 0 project — horizontal fields
                     ColumnLayout {
+                        anchors.fill: parent
+                        visible: window.step === 0
                         spacing: 8
                         RowLayout {
                             Layout.fillWidth: true
@@ -425,6 +428,8 @@ Md3ApplicationWindow {
 
                     // 1 template — horizontal cards
                     RowLayout {
+                        anchors.fill: parent
+                        visible: window.step === 1
                         spacing: 8
                         Repeater {
                             model: [
@@ -475,6 +480,8 @@ Md3ApplicationWindow {
 
                     // 2 Qt kits — multi-select
                     ColumnLayout {
+                        anchors.fill: parent
+                        visible: window.step === 2
                         spacing: 6
                         RowLayout {
                             Layout.fillWidth: true
@@ -568,6 +575,8 @@ Md3ApplicationWindow {
 
                     // 3 library + options
                     ColumnLayout {
+                        anchors.fill: parent
+                        visible: window.step === 3
                         spacing: 8
                         RowLayout {
                             Layout.fillWidth: true
@@ -752,6 +761,7 @@ Md3ApplicationWindow {
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 40
                     spacing: 8
                     Md3Button {
                         visible: window.step < window.stepCount
