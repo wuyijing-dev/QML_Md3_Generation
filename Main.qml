@@ -18,7 +18,14 @@ Md3ApplicationWindow {
 
     Component.onCompleted: {
         Md3Theme.applySeed("#6750A4")
-        selectPreferredKits()
+        reconcileKitSelection()
+    }
+
+    Connections {
+        target: ProjectGenerator
+        function onKitsChanged() {
+            window.reconcileKitSelection()
+        }
     }
 
     property int step: 0
@@ -61,12 +68,35 @@ Md3ApplicationWindow {
         return "static"
     }
 
-    function buildTypeToIndex(v) {
-        return v === "Debug" ? 1 : 0
+    function isMingwKitName(kit) {
+        return String(kit).toLowerCase().indexOf("mingw") >= 0
     }
 
-    function indexToBuildType(i) {
-        return i === 1 ? "Debug" : "Release"
+    function reconcileKitSelection() {
+        const kits = ProjectGenerator.kits
+        if (kits.length === 0) {
+            selectedKitIndexes = []
+            return
+        }
+        const selectedPrefixes = []
+        for (let i = 0; i < selectedKitIndexes.length; ++i) {
+            const idx = selectedKitIndexes[i]
+            if (idx >= 0 && idx < kits.length)
+                selectedPrefixes.push(kits[idx].prefix)
+        }
+        const newIndexes = []
+        for (let p = 0; p < selectedPrefixes.length; ++p) {
+            for (let i = 0; i < kits.length; ++i) {
+                if (kits[i].prefix === selectedPrefixes[p]) {
+                    newIndexes.push(i)
+                    break
+                }
+            }
+        }
+        if (newIndexes.length === 0)
+            selectPreferredKits()
+        else
+            selectedKitIndexes = newIndexes
     }
 
     function selectPreferredKits() {
@@ -77,12 +107,14 @@ Md3ApplicationWindow {
         }
         const onWindows = Qt.platform.os === "windows"
         let idx = -1
-        // Prefer 6.10 + platform toolchain
+        // Prefer 6.10 + platform toolchain (MSVC/Clang on Windows, gcc/linux on Linux)
         for (let i = 0; i < kits.length; ++i) {
             const k = kits[i]
             const ver = String(k.version)
             const kit = String(k.kit).toLowerCase()
             if (ver.indexOf("6.10") !== 0 && ver.indexOf("6.8") !== 0 && ver.indexOf("6.9") !== 0)
+                continue
+            if (onWindows && isMingwKitName(kit))
                 continue
             if (onWindows && (kit.indexOf("msvc") >= 0 || kit.indexOf("clang") >= 0)) {
                 idx = i
@@ -94,11 +126,11 @@ Md3ApplicationWindow {
                 break
             }
         }
-        // Any Qt 6.x
+        // Any Qt 6.x, still skip MinGW on Windows unless it is the only kit
         if (idx < 0) {
             for (let i = 0; i < kits.length; ++i) {
                 const kit = String(kits[i].kit).toLowerCase()
-                if (onWindows && kit.indexOf("mingw") >= 0)
+                if (onWindows && isMingwKitName(kit))
                     continue
                 if (String(kits[i].version).indexOf("6.") === 0
                         || String(kits[i].version) === "system") {
@@ -107,8 +139,16 @@ Md3ApplicationWindow {
                 }
             }
         }
+        if (idx < 0) {
+            for (let i = 0; i < kits.length; ++i) {
+                if (!onWindows || !isMingwKitName(kits[i].kit)) {
+                    idx = i
+                    break
+                }
+            }
+        }
         if (idx < 0)
-            idx = kits.length - 1
+            idx = 0
         selectedKitIndexes = [idx]
     }
 
@@ -426,16 +466,16 @@ Md3ApplicationWindow {
                         Item { Layout.fillHeight: true }
                     }
 
-                    // 1 template — horizontal cards
+                    // 1 template — text on top, preview below
                     RowLayout {
                         anchors.fill: parent
                         visible: window.step === 1
                         spacing: 8
                         Repeater {
                             model: [
-                                { title: qsTr("空白"), sub: qsTr("空窗口") },
-                                { title: qsTr("基础"), sub: qsTr("按钮示例") },
-                                { title: qsTr("导航"), sub: qsTr("Rail 多页") }
+                                { title: qsTr("空白"), sub: qsTr("空窗口"), kind: "empty" },
+                                { title: qsTr("基础"), sub: qsTr("按钮示例"), kind: "basic" },
+                                { title: qsTr("导航"), sub: qsTr("Rail 多页"), kind: "rail" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
@@ -451,23 +491,137 @@ Md3ApplicationWindow {
                                               ? Md3Theme.colorScheme.primary
                                               : Md3Theme.colorScheme.outlineVariant
 
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    Text {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: modelData.title
-                                        color: Md3Theme.colorScheme.colorOnSurface
-                                        font.family: Md3Theme.typography.fontFamily
-                                        font.pixelSize: 15
-                                        font.weight: Font.Medium
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 8
+
+                                    Column {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+                                        Text {
+                                            width: parent.width
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: modelData.title
+                                            color: Md3Theme.colorScheme.colorOnSurface
+                                            font.family: Md3Theme.typography.fontFamily
+                                            font.pixelSize: 15
+                                            font.weight: Font.Medium
+                                        }
+                                        Text {
+                                            width: parent.width
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: modelData.sub
+                                            color: Md3Theme.colorScheme.colorOnSurfaceVariant
+                                            font.family: Md3Theme.typography.fontFamily
+                                            font.pixelSize: 11
+                                        }
                                     }
-                                    Text {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: modelData.sub
-                                        color: Md3Theme.colorScheme.colorOnSurfaceVariant
-                                        font.family: Md3Theme.typography.fontFamily
-                                        font.pixelSize: 11
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        Layout.minimumHeight: 72
+
+                                        // Mini window preview
+                                        Rectangle {
+                                            id: previewFrame
+                                            anchors.centerIn: parent
+                                            width: Math.min(parent.width - 4, 112)
+                                            height: Math.min(parent.height - 4, 80)
+                                            radius: 6
+                                            color: Md3Theme.colorScheme.surface
+                                            border.width: 1
+                                            border.color: Md3Theme.colorScheme.outlineVariant
+
+                                            Rectangle {
+                                                anchors.top: parent.top
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                height: 14
+                                                radius: 6
+                                                color: Md3Theme.colorScheme.surfaceContainerHigh
+                                                Rectangle {
+                                                    anchors.bottom: parent.bottom
+                                                    width: parent.width
+                                                    height: parent.height / 2
+                                                    color: parent.color
+                                                }
+                                                Row {
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 5
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    spacing: 3
+                                                    Repeater {
+                                                        model: 3
+                                                        Rectangle {
+                                                            width: 4
+                                                            height: 4
+                                                            radius: 2
+                                                            color: Md3Theme.colorScheme.outline
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // empty — blank content
+                                            Item {
+                                                visible: modelData.kind === "empty"
+                                                anchors.fill: parent
+                                                anchors.topMargin: 14
+                                            }
+
+                                            // basic — centered button
+                                            Rectangle {
+                                                visible: modelData.kind === "basic"
+                                                anchors.centerIn: parent
+                                                anchors.verticalCenterOffset: 6
+                                                width: 44
+                                                height: 16
+                                                radius: 8
+                                                color: Md3Theme.colorScheme.primary
+                                            }
+
+                                            // rail — side nav + content
+                                            Row {
+                                                visible: modelData.kind === "rail"
+                                                anchors.fill: parent
+                                                anchors.topMargin: 14
+                                                spacing: 0
+                                                Rectangle {
+                                                    width: previewFrame.width * 0.28
+                                                    height: previewFrame.height - 14
+                                                    color: Md3Theme.colorScheme.surfaceContainerLow
+                                                    Column {
+                                                        anchors.centerIn: parent
+                                                        spacing: 4
+                                                        Repeater {
+                                                            model: 3
+                                                            Rectangle {
+                                                                width: 10
+                                                                height: 10
+                                                                radius: 5
+                                                                color: index === 0
+                                                                       ? Md3Theme.colorScheme.primary
+                                                                       : Md3Theme.colorScheme.outlineVariant
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: previewFrame.width * 0.72 - 1
+                                                    height: previewFrame.height - 14
+                                                    color: "transparent"
+                                                    Rectangle {
+                                                        anchors.centerIn: parent
+                                                        width: parent.width * 0.55
+                                                        height: 8
+                                                        radius: 4
+                                                        color: Md3Theme.colorScheme.surfaceContainerHighest
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 MouseArea {
@@ -522,8 +676,7 @@ Md3ApplicationWindow {
                                     if (!d)
                                         return
                                     if (ProjectGenerator.addCustomKit(d)) {
-                                        window.selectedKitIndexes =
-                                                window.selectedKitIndexes.concat([ProjectGenerator.kits.length - 1])
+                                        window.selectedKitIndexes = [ProjectGenerator.kits.length - 1]
                                         snack.show(qsTr("已添加自定义 Kit"))
                                     } else {
                                         snack.show(ProjectGenerator.lastError || qsTr("添加失败"))
@@ -675,14 +828,28 @@ Md3ApplicationWindow {
                                 font.family: Md3Theme.typography.fontFamily
                                 font.pixelSize: 12
                             }
-                            Md3SegmentedButton {
-                                Layout.fillWidth: true
-                                model: [
-                                    { text: qsTr("Release") },
-                                    { text: qsTr("Debug") }
-                                ]
-                                currentIndex: buildTypeToIndex(window.buildType)
-                                onSelectionChanged: window.buildType = indexToBuildType(currentIndex)
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                text: qsTr("Release")
+                                color: window.buildType === "Release"
+                                       ? Md3Theme.colorScheme.colorOnSurface
+                                       : Md3Theme.colorScheme.colorOnSurfaceVariant
+                                font.family: Md3Theme.typography.fontFamily
+                                font.pixelSize: 12
+                            }
+                            Md3Switch {
+                                checked: window.buildType === "Debug"
+                                onToggled: function (on) {
+                                    window.buildType = on ? "Debug" : "Release"
+                                }
+                            }
+                            Text {
+                                text: qsTr("Debug")
+                                color: window.buildType === "Debug"
+                                       ? Md3Theme.colorScheme.colorOnSurface
+                                       : Md3Theme.colorScheme.colorOnSurfaceVariant
+                                font.family: Md3Theme.typography.fontFamily
+                                font.pixelSize: 12
                             }
                         }
                         RowLayout {

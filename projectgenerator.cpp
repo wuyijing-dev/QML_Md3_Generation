@@ -95,6 +95,21 @@ QString ProjectGenerator::detectDefaultQtRoot()
             return p;
     }
 
+    // Prefer the Qt prefix used to build / run this app (MSVC kit, system /usr, …).
+    const QString fromPath = queryQtInstallPrefix();
+    if (!fromPath.isEmpty() && QFileInfo(fromPath).isDir())
+        return QDir::cleanPath(fromPath);
+
+    const QByteArray cpp = qgetenv("CMAKE_PREFIX_PATH");
+    if (!cpp.isEmpty()) {
+        for (const QString &part :
+             QString::fromLocal8Bit(cpp).split(QDir::listSeparator(), Qt::SkipEmptyParts)) {
+            const QString p = QDir::cleanPath(part.trimmed());
+            if (!p.isEmpty() && isQt6Prefix(p))
+                return p;
+        }
+    }
+
     // Online installer roots
     const QString homeQt = QDir::cleanPath(QDir::homePath() + QStringLiteral("/Qt"));
 #if defined(Q_OS_WIN)
@@ -114,19 +129,6 @@ QString ProjectGenerator::detectDefaultQtRoot()
     for (const QString &c : candidates) {
         if (QFileInfo(c).isDir())
             return c;
-    }
-
-    // From PATH qmake: …/6.10.2/gcc_64 → prefer installer root …/Qt
-    const QString prefix = queryQtInstallPrefix();
-    if (!prefix.isEmpty()) {
-        QDir d(prefix);
-        if (d.cdUp()) {
-            const QString ver = d.dirName();
-            static const QRegularExpression verRe(QStringLiteral(R"(^\d+\.\d+(\.\d+)?$)"));
-            if (verRe.match(ver).hasMatch() && d.cdUp() && QFileInfo(d.absolutePath()).isDir())
-                return d.absolutePath(); // e.g. $HOME/Qt
-        }
-        return prefix; // system /usr or flat prefix
     }
 
 #if defined(Q_OS_WIN)
@@ -469,46 +471,27 @@ QString ProjectGenerator::render(const QString &text, const QMap<QString, QStrin
 
 void ProjectGenerator::refreshKits()
 {
+    // Keep user-added custom kits across rescans of the Qt root.
+    QVariantList preserved;
+    for (const QVariant &v : std::as_const(m_kits)) {
+        if (v.toMap().value(QStringLiteral("custom")).toBool())
+            preserved.append(v);
+    }
+
     m_kits.clear();
 
-    // Primary: user-selected / detected Qt root (online installer or flat prefix)
+    // Only scan the Qt root shown in the UI — avoids silently mixing in MinGW from
+    // other install paths (D:/Qt vs C:/Qt, CMAKE_PREFIX_PATH, PATH, …).
     if (!m_qtRoot.trimmed().isEmpty()) {
         scanInstallerKits(m_qtRoot);
         if (isQt6Prefix(m_qtRoot))
             tryAddKitPrefix(m_qtRoot, false);
     }
 
-    // Extra roots commonly present on Linux / Windows (do not change m_qtRoot)
-    QStringList extraRoots;
-#if defined(Q_OS_WIN)
-    extraRoots << QStringLiteral("D:/Qt") << QStringLiteral("C:/Qt")
-               << QDir::cleanPath(QDir::homePath() + QStringLiteral("/Qt"));
-#else
-    extraRoots << QDir::cleanPath(QDir::homePath() + QStringLiteral("/Qt"))
-               << QStringLiteral("/opt/Qt")
-               << QStringLiteral("/usr");
-#endif
-    for (const QString &r : extraRoots) {
-        if (r.isEmpty() || r == QDir::cleanPath(m_qtRoot))
-            continue;
-        if (!QFileInfo(r).isDir())
-            continue;
-        scanInstallerKits(r);
-        if (isQt6Prefix(r))
-            tryAddKitPrefix(r, false);
-    }
-
-    // PATH qmake / qtpaths prefix (system packages, custom installs)
-    const QString fromPath = queryQtInstallPrefix();
-    if (!fromPath.isEmpty())
-        tryAddKitPrefix(fromPath, false);
-
-    // CMAKE_PREFIX_PATH may list kit prefixes
-    const QString cpp = QString::fromLocal8Bit(qgetenv("CMAKE_PREFIX_PATH"));
-    for (const QString &part : cpp.split(QDir::listSeparator(), Qt::SkipEmptyParts)) {
-        const QString p = QDir::cleanPath(part.trimmed());
-        if (!p.isEmpty())
-            tryAddKitPrefix(p, false);
+    for (const QVariant &v : std::as_const(preserved)) {
+        const QString prefix = v.toMap().value(QStringLiteral("prefix")).toString();
+        if (!prefix.isEmpty())
+            tryAddKitPrefix(prefix, true);
     }
 
     emit kitsChanged();
