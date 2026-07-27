@@ -25,8 +25,13 @@ CMake always loads Md3 from `${CMAKE_CURRENT_SOURCE_DIR}/Md3`.
 
 ## Build
 
-Open `CMakeLists.txt` in **Qt Creator** and use kit **{{QT_KIT}}** (prefix `{{QT_PREFIX}}`).
+Open `CMakeLists.txt` in **Qt Creator** and configure kit **{{QT_KIT}}** (`{{QT_PREFIX}}`).
 Default `CMAKE_BUILD_TYPE` is **{{CMAKE_BUILD_TYPE}}**.
+
+**Important:** pick the normal Desktop kit (e.g. *Desktop Qt {{QT_VERSION}} MSVC2022 64bit*).
+Do **not** use entries labeled *(CMake preset)* — those are leftover global presets and may pick MinGW while Md3 was built with MSVC.
+
+If you still see many preset kits: close the project, delete the `.qtcreator` folder beside `CMakeLists.txt`, then reopen and configure once.
 
 ```bash
 cmake -S . -B build -DCMAKE_PREFIX_PATH="{{QT_PREFIX}}" -DCMAKE_BUILD_TYPE={{CMAKE_BUILD_TYPE}}

@@ -1022,6 +1022,11 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     }
 
     QFile::remove(destDir.filePath(QStringLiteral("CMakePresets.json")));
+    QFile::remove(destDir.filePath(QStringLiteral("CMakeUserPresets.json")));
+    QFile::remove(destDir.filePath(QStringLiteral("CMakeLists.txt.user")));
+    QDir qtcDir(destDir.filePath(QStringLiteral(".qtcreator")));
+    if (qtcDir.exists())
+        qtcDir.removeRecursively();
 
     m_lastOutput = dest;
     emit lastOutputChanged();
