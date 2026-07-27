@@ -730,7 +730,7 @@ Md3ApplicationWindow {
                                           : (window.md3Linkage === "shared" ? qsTr("动态")
                                              : qsTr("静态")))
                                   + " / "
-                                  + window.buildType
+                                  + window.buildType)
                             color: Md3Theme.colorScheme.colorOnSurfaceVariant
                             font.family: Md3Theme.typography.fontFamily
                             font.pixelSize: 11
