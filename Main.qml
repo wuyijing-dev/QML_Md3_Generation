@@ -27,6 +27,7 @@ Md3ApplicationWindow {
     property int templateIndex: 1
     property bool md3Absolute: false
     property bool copyLibrary: true
+    property string md3Linkage: "auto" // auto | shared | static
     property bool autoDedupeName: true
     property string resolvedName: "MyMd3App"
     readonly property var templateIds: ["empty", "basic", "rail"]
@@ -169,6 +170,7 @@ Md3ApplicationWindow {
             md3Path: md3Field.text.trim(),
             md3Absolute: copyLibrary ? false : md3Absolute,
             copyLibrary: copyLibrary,
+            md3Linkage: md3Linkage,
             vendorFolder: "Md3",
             dark: darkSwitch.checked,
             seed: seedField.text.trim() || "#6750A4",
@@ -609,6 +611,46 @@ Md3ApplicationWindow {
                             }
                         }
                         RowLayout {
+                            spacing: 8
+                            Text {
+                                text: qsTr("Md3 链接方式")
+                                color: Md3Theme.colorScheme.colorOnSurfaceVariant
+                                font.family: Md3Theme.typography.fontFamily
+                                font.pixelSize: 12
+                            }
+                            Repeater {
+                                model: [
+                                    { id: "auto", label: qsTr("自动") },
+                                    { id: "shared", label: qsTr("动态库") },
+                                    { id: "static", label: qsTr("静态库") }
+                                ]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    radius: Md3Theme.shape.small
+                                    border.width: 1
+                                    border.color: window.md3Linkage === modelData.id
+                                                  ? Md3Theme.colorScheme.primary
+                                                  : Md3Theme.colorScheme.outlineVariant
+                                    color: window.md3Linkage === modelData.id
+                                           ? Md3Theme.colorScheme.secondaryContainer
+                                           : Md3Theme.colorScheme.surfaceContainerLow
+                                    implicitWidth: 78
+                                    implicitHeight: 28
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        color: Md3Theme.colorScheme.colorOnSurface
+                                        font.family: Md3Theme.typography.fontFamily
+                                        font.pixelSize: 11
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: window.md3Linkage = modelData.id
+                                    }
+                                }
+                            }
+                        }
+                        RowLayout {
                             spacing: 20
                             Row {
                                 spacing: 8
@@ -641,7 +683,11 @@ Md3ApplicationWindow {
                                   .arg(window.resolvedName)
                                   .arg(templateIds[templateIndex])
                                   .arg(window.selectedKitsLabel())
-                                  .arg(window.copyLibrary ? qsTr("库→./Md3") : qsTr("外链库"))
+                                  .arg((window.copyLibrary ? qsTr("库→./Md3") : qsTr("外链库"))
+                                       + " / "
+                                       + (window.md3Linkage === "auto" ? qsTr("自动")
+                                          : (window.md3Linkage === "shared" ? qsTr("动态")
+                                             : qsTr("静态"))))
                             color: Md3Theme.colorScheme.colorOnSurfaceVariant
                             font.family: Md3Theme.typography.fontFamily
                             font.pixelSize: 11

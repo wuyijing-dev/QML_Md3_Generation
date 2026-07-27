@@ -397,6 +397,28 @@ static QString normalizeMd3Root(const QString &path)
     return p;
 }
 
+static int detectPackagedMd3SharedFlag(const QString &md3PackageDir)
+{
+    const QString cfg = md3PackageDir + QStringLiteral("/lib/cmake/Md3/Md3Config.cmake");
+    QFile f(cfg);
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QString text = QString::fromUtf8(f.readAll());
+        const QRegularExpression re(QStringLiteral(R"(set\(_MD3_PACKAGE_SHARED\s+([01])\))"));
+        const QRegularExpressionMatch m = re.match(text);
+        if (m.hasMatch())
+            return m.captured(1) == QLatin1String("1") ? 1 : 0;
+    }
+
+    // Fallbacks for copied/prebuilt layouts
+    if (QFileInfo::exists(md3PackageDir + QStringLiteral("/bin/Md3.dll"))
+            || QFileInfo::exists(md3PackageDir + QStringLiteral("/bin/libMd3.so"))
+            || QFileInfo::exists(md3PackageDir + QStringLiteral("/bin/libMd3.dylib")))
+        return 1;
+    if (QFileInfo::exists(md3PackageDir + QStringLiteral("/Md3Prebuilt.cmake")))
+        return 0;
+    return -1; // unknown
+}
+
 bool ProjectGenerator::addCustomKit(const QString &prefixPath)
 {
     const QString prefix = cmakePath(prefixPath);
@@ -790,6 +812,8 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     const bool force = options.value(QStringLiteral("force")).toBool();
     const bool md3Absolute = options.value(QStringLiteral("md3Absolute")).toBool();
     const bool copyLibrary = options.value(QStringLiteral("copyLibrary")).toBool();
+    const QString md3Linkage = options.value(QStringLiteral("md3Linkage"),
+                                             QStringLiteral("auto")).toString().trimmed().toLower();
     const QString vendorFolder = options.value(QStringLiteral("vendorFolder"),
                                                QStringLiteral("Md3")).toString().trimmed();
 
@@ -863,6 +887,13 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     Q_UNUSED(copyLibrary);
     Q_UNUSED(md3Absolute);
     Q_UNUSED(vendorFolder);
+    if (md3Linkage != QLatin1String("auto")
+            && md3Linkage != QLatin1String("shared")
+            && md3Linkage != QLatin1String("static")) {
+        setError(QStringLiteral("Md3 链接方式无效（应为 auto/shared/static）"));
+        setBusy(false);
+        return false;
+    }
     if (selectedKits.isEmpty()) {
         setError(QStringLiteral("请至少选择一个编译器 / Kit"));
         setBusy(false);
@@ -903,6 +934,30 @@ bool ProjectGenerator::generate(const QVariantMap &options)
             return false;
         }
         absMd3 = cmakePath(vendorAbs);
+
+        if (md3Linkage != QLatin1String("auto")) {
+            const int sharedFlag = detectPackagedMd3SharedFlag(vendorAbs);
+            if (sharedFlag < 0) {
+                setError(QStringLiteral(
+                    "无法识别 Md3 包是动态还是静态。请使用 scripts/package-windows.ps1 或 package-linux.sh 重新打包。"));
+                setBusy(false);
+                return false;
+            }
+            const bool expectShared = (md3Linkage == QLatin1String("shared"));
+            const bool actualShared = (sharedFlag == 1);
+            if (expectShared != actualShared) {
+                setError(QStringLiteral(
+                    "Md3 包类型不匹配：你选择了%1，但当前包是%2。请重打包后再创建。\n"
+                    "Windows: scripts/package-windows.ps1 -Shared:%3\n"
+                    "Linux:   SHARED=%4 ./scripts/package-linux.sh")
+                    .arg(expectShared ? QStringLiteral("动态库") : QStringLiteral("静态库"))
+                    .arg(actualShared ? QStringLiteral("动态库") : QStringLiteral("静态库"))
+                    .arg(expectShared ? QStringLiteral("$true") : QStringLiteral("$false"))
+                    .arg(expectShared ? QStringLiteral("1") : QStringLiteral("0")));
+                setBusy(false);
+                return false;
+            }
+        }
     }
 
     QString target = name.toLower();
