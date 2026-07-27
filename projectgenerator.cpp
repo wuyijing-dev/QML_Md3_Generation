@@ -1020,8 +1020,6 @@ bool ProjectGenerator::generate(const QVariantMap &options)
         { setBusy(false); return false; }
     if (!writeBytes(base + QStringLiteral("/_common/.gitignore"), destDir.filePath(QStringLiteral(".gitignore"))))
         { setBusy(false); return false; }
-    if (!ok(QStringLiteral("/_common/scripts/auto-pack.ps1.in"), QStringLiteral("scripts/auto-pack.ps1")))
-        { setBusy(false); return false; }
 
     if (tmpl == QLatin1String("empty")) {
         if (!ok(QStringLiteral("/empty/Main.qml.in"), QStringLiteral("Main.qml")))

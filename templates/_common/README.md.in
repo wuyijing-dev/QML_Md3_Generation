@@ -27,13 +27,7 @@ CMake always loads Md3 from `${CMAKE_CURRENT_SOURCE_DIR}/Md3`.
 ## Build
 
 Open `CMakeLists.txt` in **Qt Creator** and configure kit **{{QT_KIT}}** (`{{QT_PREFIX}}`).
-Default `CMAKE_BUILD_TYPE` is **{{CMAKE_BUILD_TYPE}}** (first configure). When **Release + Debug** are enabled, use Qt Creator's **Debug** and **Release** build configurations on the same Desktop kit — both are supported.
-
-**One-click pack + build (Windows):**
-
-```powershell
-.\scripts\auto-pack.ps1
-```
+Default `CMAKE_BUILD_TYPE` is **{{CMAKE_BUILD_TYPE}}** (first configure). When **Release + Debug** are enabled, use Qt Creator's **Debug** and **Release** build configurations on the same Desktop kit.
 
 ```bash
 cmake -S . -B build -DCMAKE_PREFIX_PATH="{{QT_PREFIX}}" -DCMAKE_BUILD_TYPE={{CMAKE_BUILD_TYPE}}

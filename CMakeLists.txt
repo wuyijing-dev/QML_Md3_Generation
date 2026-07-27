@@ -88,7 +88,6 @@ qt_add_resources(md3_create "md3_create_templates"
         templates/_common/main.cpp.in
         templates/_common/README.md.in
         templates/_common/.gitignore
-        templates/_common/scripts/auto-pack.ps1.in
         templates/empty/Main.qml.in
         templates/basic/Main.qml.in
         templates/rail/Main.qml.in
