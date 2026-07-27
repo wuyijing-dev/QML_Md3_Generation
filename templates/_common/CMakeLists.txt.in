@@ -95,14 +95,19 @@ if (COMMAND md3_deploy_shared_runtime)
     md3_deploy_shared_runtime({{TARGET_NAME}} "${MD3_DIR}")
 elseif (Md3_SHARED AND WIN32 AND EXISTS "${MD3_DIR}/bin/Md3.dll")
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        message(WARNING
-            "Md3: Debug build with Release-only package — use Release kit or repackage Md3.")
+        message(FATAL_ERROR
+            "Md3: Debug build requires bin/debug/Md3.dll in ${MD3_DIR}.\n"
+            "  Repackage: cd QML_MD3 && .\\scripts\\package-windows.ps1\n"
+            "  Or use a Release kit in Qt Creator.")
     endif()
     add_custom_command(TARGET {{TARGET_NAME}} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${MD3_DIR}/bin/Md3.dll" "$<TARGET_FILE_DIR:{{TARGET_NAME}}>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${MD3_DIR}/lib/qml" "$<TARGET_FILE_DIR:{{TARGET_NAME}}>/qml"
+        COMMAND ${CMAKE_COMMAND}
+            -DMD3_QML_DIR=$<TARGET_FILE_DIR:{{TARGET_NAME}}>/qml
+            -P "${MD3_DIR}/lib/cmake/Md3/Md3StripQmldirPrefer.cmake"
         COMMENT "Deploy shared Md3 beside {{TARGET_NAME}}"
     )
 endif()
