@@ -794,8 +794,13 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     const bool copyLibrary = options.value(QStringLiteral("copyLibrary")).toBool();
     const QString md3Linkage = options.value(QStringLiteral("md3Linkage"),
                                              QStringLiteral("auto")).toString().trimmed().toLower();
-    const QString buildType = options.value(QStringLiteral("buildType"),
-                                            QStringLiteral("Release")).toString().trimmed();
+    bool buildRelease = options.value(QStringLiteral("buildRelease"), true).toBool();
+    bool buildDebug = options.value(QStringLiteral("buildDebug"), false).toBool();
+    if (options.contains(QStringLiteral("buildType")) && !options.contains(QStringLiteral("buildRelease"))) {
+        const QString legacy = options.value(QStringLiteral("buildType")).toString().trimmed();
+        buildRelease = legacy != QLatin1String("Debug");
+        buildDebug = legacy == QLatin1String("Debug");
+    }
     const QString vendorFolder = options.value(QStringLiteral("vendorFolder"),
                                                QStringLiteral("Md3")).toString().trimmed();
 
@@ -876,14 +881,21 @@ bool ProjectGenerator::generate(const QVariantMap &options)
         setBusy(false);
         return false;
     }
-    if (buildType != QLatin1String("Debug")
-            && buildType != QLatin1String("Release")
-            && buildType != QLatin1String("RelWithDebInfo")
-            && buildType != QLatin1String("MinSizeRel")) {
-        setError(QStringLiteral("构建类型无效（Debug/Release/RelWithDebInfo/MinSizeRel）"));
+    if (!buildRelease && !buildDebug) {
+        setError(QStringLiteral("请至少选择 Release 或 Debug 之一"));
         setBusy(false);
         return false;
     }
+    QString buildType = buildRelease ? QStringLiteral("Release") : QStringLiteral("Debug");
+    if (buildRelease && buildDebug)
+        buildType = QStringLiteral("Release"); // first CMake configure default; Qt Creator adds Debug kit too
+    QString buildTypesLabel;
+    if (buildRelease && buildDebug)
+        buildTypesLabel = QStringLiteral("Release + Debug");
+    else if (buildRelease)
+        buildTypesLabel = QStringLiteral("Release");
+    else
+        buildTypesLabel = QStringLiteral("Debug");
     if (selectedKits.isEmpty()) {
         setError(QStringLiteral("请至少选择一个编译器 / Kit"));
         setBusy(false);
@@ -989,6 +1001,11 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     vars.insert(QStringLiteral("APP_TITLE"), name);
     vars.insert(QStringLiteral("EXTRA_QML_FILES"), extraQml);
     vars.insert(QStringLiteral("CMAKE_BUILD_TYPE"), buildType);
+    vars.insert(QStringLiteral("BUILD_TYPES"), buildTypesLabel);
+    vars.insert(QStringLiteral("BUILD_RELEASE"), buildRelease ? QStringLiteral("1") : QStringLiteral("0"));
+    vars.insert(QStringLiteral("BUILD_DEBUG"), buildDebug ? QStringLiteral("1") : QStringLiteral("0"));
+    vars.insert(QStringLiteral("BUILD_RELEASE_PS"), buildRelease ? QStringLiteral("$true") : QStringLiteral("$false"));
+    vars.insert(QStringLiteral("BUILD_DEBUG_PS"), buildDebug ? QStringLiteral("$true") : QStringLiteral("$false"));
 
     const QString base = QStringLiteral(":/md3-create/templates");
     auto ok = [&](const QString &qrc, const QString &rel) {
@@ -1002,6 +1019,8 @@ bool ProjectGenerator::generate(const QVariantMap &options)
     if (!ok(QStringLiteral("/_common/README.md.in"), QStringLiteral("README.md")))
         { setBusy(false); return false; }
     if (!writeBytes(base + QStringLiteral("/_common/.gitignore"), destDir.filePath(QStringLiteral(".gitignore"))))
+        { setBusy(false); return false; }
+    if (!ok(QStringLiteral("/_common/scripts/auto-pack.ps1.in"), QStringLiteral("scripts/auto-pack.ps1")))
         { setBusy(false); return false; }
 
     if (tmpl == QLatin1String("empty")) {

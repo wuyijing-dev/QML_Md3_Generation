@@ -35,7 +35,8 @@ Md3ApplicationWindow {
     property bool md3Absolute: false
     property bool copyLibrary: true
     property string md3Linkage: "auto" // auto | shared | static
-    property string buildType: "Release" // Debug | Release | RelWithDebInfo | MinSizeRel
+    property bool buildRelease: true
+    property bool buildDebug: false
     property bool autoDedupeName: true
     property string resolvedName: "MyMd3App"
     readonly property var templateIds: ["empty", "basic", "rail"]
@@ -198,6 +199,16 @@ Md3ApplicationWindow {
         resolvedName = ProjectGenerator.suggestProjectName(out, desired.length ? desired : "MyMd3App")
     }
 
+    function buildTypesLabel() {
+        if (buildRelease && buildDebug)
+            return qsTr("Release+Debug")
+        if (buildRelease)
+            return qsTr("Release")
+        if (buildDebug)
+            return qsTr("Debug")
+        return "—"
+    }
+
     function canNext() {
         switch (step) {
         case 0:
@@ -207,7 +218,8 @@ Md3ApplicationWindow {
         case 2:
             return selectedKitIndexes.length > 0
         case 3:
-            return ProjectGenerator.isValidMd3Path(md3Field.text.trim())
+            return (buildRelease || buildDebug)
+                    && ProjectGenerator.isValidMd3Path(md3Field.text.trim())
         }
         return false
     }
@@ -239,7 +251,8 @@ Md3ApplicationWindow {
             md3Absolute: copyLibrary ? false : md3Absolute,
             copyLibrary: copyLibrary,
             md3Linkage: md3Linkage,
-            buildType: buildType,
+            buildRelease: buildRelease,
+            buildDebug: buildDebug,
             vendorFolder: "Md3",
             dark: darkSwitch.checked,
             seed: seedField.text.trim() || "#6750A4",
@@ -832,18 +845,17 @@ Md3ApplicationWindow {
                             Row {
                                 spacing: 8
                                 Md3Switch {
-                                    checked: window.buildType === "Release"
+                                    checked: window.buildRelease
                                     onToggled: function (on) {
-                                        if (on)
-                                            window.buildType = "Release"
-                                        else if (window.buildType === "Release")
-                                            window.buildType = "Debug"
+                                        if (!on && !window.buildDebug)
+                                            return
+                                        window.buildRelease = on
                                     }
                                 }
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: qsTr("Release")
-                                    color: window.buildType === "Release"
+                                    color: window.buildRelease
                                            ? Md3Theme.colorScheme.colorOnSurface
                                            : Md3Theme.colorScheme.colorOnSurfaceVariant
                                     font.family: Md3Theme.typography.fontFamily
@@ -853,18 +865,17 @@ Md3ApplicationWindow {
                             Row {
                                 spacing: 8
                                 Md3Switch {
-                                    checked: window.buildType === "Debug"
+                                    checked: window.buildDebug
                                     onToggled: function (on) {
-                                        if (on)
-                                            window.buildType = "Debug"
-                                        else if (window.buildType === "Debug")
-                                            window.buildType = "Release"
+                                        if (!on && !window.buildRelease)
+                                            return
+                                        window.buildDebug = on
                                     }
                                 }
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: qsTr("Debug")
-                                    color: window.buildType === "Debug"
+                                    color: window.buildDebug
                                            ? Md3Theme.colorScheme.colorOnSurface
                                            : Md3Theme.colorScheme.colorOnSurfaceVariant
                                     font.family: Md3Theme.typography.fontFamily
@@ -911,7 +922,7 @@ Md3ApplicationWindow {
                                           : (window.md3Linkage === "shared" ? qsTr("动态")
                                              : qsTr("静态")))
                                   + " / "
-                                  + window.buildType)
+                                  + window.buildTypesLabel())
                             color: Md3Theme.colorScheme.colorOnSurfaceVariant
                             font.family: Md3Theme.typography.fontFamily
                             font.pixelSize: 11
