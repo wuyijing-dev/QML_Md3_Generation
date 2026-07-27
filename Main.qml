@@ -45,6 +45,30 @@ Md3ApplicationWindow {
         qsTr("自定义库目录")
     ]
 
+    function md3LinkageToIndex(v) {
+        if (v === "auto")
+            return 0
+        if (v === "shared")
+            return 1
+        return 2
+    }
+
+    function indexToMd3Linkage(i) {
+        if (i === 0)
+            return "auto"
+        if (i === 1)
+            return "shared"
+        return "static"
+    }
+
+    function buildTypeToIndex(v) {
+        return v === "Debug" ? 1 : 0
+    }
+
+    function indexToBuildType(i) {
+        return i === 1 ? "Debug" : "Release"
+    }
+
     function selectPreferredKits() {
         const kits = ProjectGenerator.kits
         if (kits.length === 0) {
@@ -60,7 +84,7 @@ Md3ApplicationWindow {
             const kit = String(k.kit).toLowerCase()
             if (ver.indexOf("6.10") !== 0 && ver.indexOf("6.8") !== 0 && ver.indexOf("6.9") !== 0)
                 continue
-            if (onWindows && kit.indexOf("mingw") >= 0) {
+            if (onWindows && (kit.indexOf("msvc") >= 0 || kit.indexOf("clang") >= 0)) {
                 idx = i
                 break
             }
@@ -73,6 +97,9 @@ Md3ApplicationWindow {
         // Any Qt 6.x
         if (idx < 0) {
             for (let i = 0; i < kits.length; ++i) {
+                const kit = String(kits[i].kit).toLowerCase()
+                if (onWindows && kit.indexOf("mingw") >= 0)
+                    continue
                 if (String(kits[i].version).indexOf("6.") === 0
                         || String(kits[i].version) === "system") {
                     idx = i
@@ -620,36 +647,15 @@ Md3ApplicationWindow {
                                 font.family: Md3Theme.typography.fontFamily
                                 font.pixelSize: 12
                             }
-                            Repeater {
+                            Md3SegmentedButton {
+                                Layout.fillWidth: true
                                 model: [
-                                    { id: "auto", label: qsTr("自动") },
-                                    { id: "shared", label: qsTr("动态库") },
-                                    { id: "static", label: qsTr("静态库") }
+                                    { text: qsTr("自动") },
+                                    { text: qsTr("动态库") },
+                                    { text: qsTr("静态库") }
                                 ]
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    radius: Md3Theme.shape.small
-                                    border.width: 1
-                                    border.color: window.md3Linkage === modelData.id
-                                                  ? Md3Theme.colorScheme.primary
-                                                  : Md3Theme.colorScheme.outlineVariant
-                                    color: window.md3Linkage === modelData.id
-                                           ? Md3Theme.colorScheme.secondaryContainer
-                                           : Md3Theme.colorScheme.surfaceContainerLow
-                                    implicitWidth: 78
-                                    implicitHeight: 28
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData.label
-                                        color: Md3Theme.colorScheme.colorOnSurface
-                                        font.family: Md3Theme.typography.fontFamily
-                                        font.pixelSize: 11
-                                    }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: window.md3Linkage = modelData.id
-                                    }
-                                }
+                                currentIndex: md3LinkageToIndex(window.md3Linkage)
+                                onSelectionChanged: window.md3Linkage = indexToMd3Linkage(currentIndex)
                             }
                         }
                         RowLayout {
@@ -660,35 +666,14 @@ Md3ApplicationWindow {
                                 font.family: Md3Theme.typography.fontFamily
                                 font.pixelSize: 12
                             }
-                            Repeater {
+                            Md3SegmentedButton {
+                                Layout.fillWidth: true
                                 model: [
-                                    { id: "Release", label: qsTr("Release") },
-                                    { id: "Debug", label: qsTr("Debug") }
+                                    { text: qsTr("Release") },
+                                    { text: qsTr("Debug") }
                                 ]
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    radius: Md3Theme.shape.small
-                                    border.width: 1
-                                    border.color: window.buildType === modelData.id
-                                                  ? Md3Theme.colorScheme.primary
-                                                  : Md3Theme.colorScheme.outlineVariant
-                                    color: window.buildType === modelData.id
-                                           ? Md3Theme.colorScheme.secondaryContainer
-                                           : Md3Theme.colorScheme.surfaceContainerLow
-                                    implicitWidth: 82
-                                    implicitHeight: 28
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData.label
-                                        color: Md3Theme.colorScheme.colorOnSurface
-                                        font.family: Md3Theme.typography.fontFamily
-                                        font.pixelSize: 11
-                                    }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: window.buildType = modelData.id
-                                    }
-                                }
+                                currentIndex: buildTypeToIndex(window.buildType)
+                                onSelectionChanged: window.buildType = indexToBuildType(currentIndex)
                             }
                         }
                         RowLayout {
