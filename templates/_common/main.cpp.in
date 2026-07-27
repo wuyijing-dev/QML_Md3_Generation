@@ -1,7 +1,11 @@
 #include "md3.h"
 
+// Static packages must force-link the QML plugin at build time.
+// Shared packages load Md3plugin from Md3/lib/qml at runtime (see CMakeLists.txt).
+#if !defined(MD3_SHARED)
 #include <QtQml/qqmlextensionplugin.h>
 Q_IMPORT_QML_PLUGIN(Md3Plugin)
+#endif
 
 int main(int argc, char *argv[])
 {

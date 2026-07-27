@@ -20,6 +20,8 @@ qt_standard_project_setup(REQUIRES {{QT_VERSION_MM}})
 #       lib/
 #       include/
 #       lib/cmake/Md3/     or Md3Prebuilt.cmake
+#
+# The Md3 package must match your Qt kit (MSVC ↔ msvc2022_64, MinGW ↔ mingw_64).
 set(MD3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Md3" CACHE PATH
     "Md3 package next to this CMakeLists.txt")
 if (EXISTS "${MD3_DIR}/lib/cmake/Md3/Md3Config.cmake")
@@ -53,19 +55,29 @@ target_link_libraries({{TARGET_NAME}} PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
 )
-# Static QML: do not link Md3 before the plugin. Prefer Md3::QmlPlugin helper.
-if (TARGET Md3::QmlPlugin)
-    target_link_libraries({{TARGET_NAME}} PRIVATE Md3::QmlPlugin)
-else()
-    if (TARGET Md3plugin)
-        target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin>")
-    endif()
-    if (TARGET Md3plugin_init)
-        target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin_init>")
-    endif()
+
+# ---- Link Md3 (shared vs static) ----
+if (Md3_SHARED)
+    # Shared: link core DLL only; QML plugin is discovered via CMAKE_QML_IMPORT_PATH.
     if (TARGET Md3::Md3)
-        target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3::Md3>")
-    elseif (TARGET Md3)
-        target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3>")
+        target_link_libraries({{TARGET_NAME}} PRIVATE Md3::Md3)
+    endif()
+    target_compile_definitions({{TARGET_NAME}} PRIVATE MD3_SHARED)
+else()
+    # Static: whole-archive so QML registration symbols are not dropped.
+    if (TARGET Md3::QmlPlugin)
+        target_link_libraries({{TARGET_NAME}} PRIVATE Md3::QmlPlugin)
+    else()
+        if (TARGET Md3plugin)
+            target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin>")
+        endif()
+        if (TARGET Md3plugin_init)
+            target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3plugin_init>")
+        endif()
+        if (TARGET Md3::Md3)
+            target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3::Md3>")
+        elseif (TARGET Md3)
+            target_link_libraries({{TARGET_NAME}} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Md3>")
+        endif()
     endif()
 endif()

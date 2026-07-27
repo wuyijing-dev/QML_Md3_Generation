@@ -198,8 +198,23 @@ if (_md3_from_package)
                 endif()
             endif()
         endif()
-    elseif (_md3_group_libs)
-        target_link_libraries(md3_create PRIVATE ${_md3_group_libs})
+    else()
+        # MSVC / other: packaged Md3 without GNU whole-archive flags
+        if (TARGET Md3::Md3)
+            target_link_libraries(md3_create PRIVATE Md3::Md3)
+        elseif (_md3_group_libs)
+            target_link_libraries(md3_create PRIVATE ${_md3_group_libs})
+        endif()
+        if (TARGET Md3plugin AND NOT Md3_SHARED)
+            target_link_libraries(md3_create PRIVATE Md3plugin)
+        endif()
+        target_link_libraries(md3_create PRIVATE
+            Qt6::Quick
+            Qt6::QuickControls2
+            Qt6::QuickEffects
+            Qt6::QuickShapesPrivate
+            Qt6::Widgets
+        )
     endif()
 else()
     # Sources via add_subdirectory — normal target graph

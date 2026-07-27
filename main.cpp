@@ -3,10 +3,12 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
 
-// Static Md3 QML module (packaged libMd3plugin.a) must be referenced or the
-// linker drops it — without this, runtime shows: module "Md3" is not installed.
+// Static Md3 QML module must be referenced or the linker drops registration.
+// Shared packages load Md3plugin.dll from the QML import path instead.
+#if !defined(MD3_SHARED)
 #include <QtQml/qqmlextensionplugin.h>
 Q_IMPORT_QML_PLUGIN(Md3Plugin)
+#endif
 
 int main(int argc, char *argv[])
 {
